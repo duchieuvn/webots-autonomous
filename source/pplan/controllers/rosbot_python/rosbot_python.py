@@ -68,7 +68,8 @@ for sensor in distance_sensors:
 
 MAP_SIZE = 1000 # 1000cm = 10m
 RESOLUTION = 0.01 # 1cm for 1 grid cell
-grid_map = np.array([[0 for _ in range(MAP_SIZE)] for _ in range(MAP_SIZE)], dtype=np.uint8)
+# grid_map = np.array([[0 for _ in range(MAP_SIZE)] for _ in range(MAP_SIZE)], dtype=np.uint8)
+grid_map = cv2.imread('../../textures/map1.png', cv2.IMREAD_GRAYSCALE)
 
 def turn_right_milisecond(s=200):
     front_left_motor.setVelocity(4)
@@ -190,24 +191,87 @@ def draw_position_in_map():
     pos = np.array(robot.getSelf().getPosition()[:2]) / RESOLUTION
     map_x = int(MAP_SIZE//2 + int(pos[0]))
     map_y = int(MAP_SIZE//2 - np.ceil(pos[1]))
+
     for i in [-3, -2, -1, 0, 1, 2, 3]:
         for j in [-3, -2, -1, 0, 1, 2, 3]:
             grid_map[map_y+j][map_x+i] = 255
 
-# plt.ion()
-# fig, ax = plt.subplots()
+def simple_plan(target, tolerance=0.2):
+    """
+    Navigate the robot to the given `target = (x, y)` position in Webots coordinates.
+    Uses compass for orientation and distance sensors for simple obstacle avoidance.
+    
+    Parameters:
+        target (np.array): target position as [x, y] in meters.
+        tolerance (float): distance threshold to consider the target "reached".
+    """
+
+    def get_position():
+        # Get current robot position (x, y)
+        pos = robot.getSelf().getPosition()
+        return np.array([pos[0], pos[1]])
+
+    def angle_to_target(current_pos, target_pos):
+        # Compute angle (in degrees) from current position to target position
+        dx = target_pos[0] - current_pos[0]
+        dy = target_pos[1] - current_pos[1]
+        angle = (np.degrees(np.arctan2(dx, dy)) + 360) % 360
+        return angle
+
+    def rotate_to_heading(target_heading, threshold=3.0):
+        # Rotate the robot to face the target heading (compass-based)
+        while robot.step(TIME_STEP) != -1:
+            current_heading = get_heading_deg()
+            diff = (target_heading - current_heading + 540) % 360 - 180
+            
+            if abs(diff) < threshold:
+                break
+
+            direction = 'right' if diff > 0 else 'left'
+            sign = 1 if direction == 'right' else -1
+
+            # Spin wheels in opposite directions to rotate in place
+            front_left_motor.setVelocity(3.0 * sign)
+            rear_left_motor.setVelocity(3.0 * sign)
+            front_right_motor.setVelocity(-3.0 * sign)
+            rear_right_motor.setVelocity(-3.0 * sign)
+
+        stop_motor()
+
+    current_pos = get_position()
+    distance = np.linalg.norm(target - current_pos)
+
+    if distance < tolerance:
+        print("[mvc_plan] Reached target!")
+        stop_motor()
+        return
+
+    # Face the robot toward the target position
+    desired_heading = angle_to_target(current_pos, target)
+    rotate_to_heading(desired_heading)
+
+    # Check and avoid obstacles in front
+    distance_sensors_value = get_distances()
+    if min(distance_sensors_value[0], distance_sensors_value[2]) < 0.3:
+        adapt_direction(distance_sensors_value)
+
+    # Move forward toward the target
+    motor_speed = [8, 8]
+    front_left_motor.setVelocity(motor_speed[0])
+    front_right_motor.setVelocity(motor_speed[1])
+    rear_left_motor.setVelocity(motor_speed[0])
+    rear_right_motor.setVelocity(motor_speed[1])
+
+
 g_count = 0 
 
 # Main loop
 try:
     while robot.step(TIME_STEP) != -1:
 
-        # pos = np.array(robot.getSelf().getPosition()[:2]) / RESOLUTION
-        # map_x = int(MAP_SIZE//2 + int(pos[0]))
-        # map_y = int(MAP_SIZE//2 - np.ceil(pos[1]))
-        # for i in [-3, -2, -1, 0, 1, 2, 3]:
-        #     for j in [-3, -2, -1, 0, 1, 2, 3]:
-        #         grid_map[map_y+j][map_x+i] = 255
+        pos = np.array(robot.getSelf().getPosition()[:2]) / RESOLUTION
+        print("Position: ", pos)
+
 
         # distance_sensors_value = get_distances()
         # adapt_direction(distance_sensors_value)
@@ -233,9 +297,9 @@ try:
 
         # g_count += 1
 
-        rotate_in_place(180, 'right')
-        robot.step(1000)
-        print(compass.getValues())
+        target_position = np.array([0, 0])  # Example target coordinates in meters
+        simple_plan(target_position)
 
 except:
+    exit(0)
     pass
