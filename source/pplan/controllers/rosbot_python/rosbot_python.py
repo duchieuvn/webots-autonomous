@@ -69,21 +69,9 @@ for sensor in distance_sensors:
 MAP_SIZE = 1000 # 1000cm = 10m
 RESOLUTION = 0.01 # 1cm for 1 grid cell
 # grid_map = np.array([[0 for _ in range(MAP_SIZE)] for _ in range(MAP_SIZE)], dtype=np.uint8)
-grid_map = cv2.imread('../../textures/map1.png', cv2.IMREAD_GRAYSCALE)
-
-def turn_right_milisecond(s=200):
-    front_left_motor.setVelocity(4)
-    rear_left_motor.setVelocity(4)
-    front_right_motor.setVelocity(-4)
-    rear_right_motor.setVelocity(-4) 
-    robot.step(s)  
-
-def turn_left_milisecond(s=200):
-    front_left_motor.setVelocity(-4)
-    rear_left_motor.setVelocity(-4)
-    front_right_motor.setVelocity(4)
-    rear_right_motor.setVelocity(4) 
-    robot.step(s)  
+grid_map = cv2.imread('../../textures/path_test_map.bmp', cv2.IMREAD_GRAYSCALE)
+visual_map = cv2.imread('../../textures/map1.png', cv2.IMREAD_COLOR)
+visual_map = cv2.cvtColor(visual_map, cv2.COLOR_BGR2RGB)
 
 def go_backward_milisecond(s=200):
     front_left_motor.setVelocity(-4)
@@ -136,7 +124,6 @@ def rotate_in_place(degree, direction, speed=5.0):
 
     # Reference from ChatGPT: https://chatgpt.com/share/68011098-b5d4-8013-be07-b764d0f7f035
 
-
 def adapt_direction(distance_sensors_value):
     # while there is an obstacle in front
     count = 0
@@ -146,12 +133,12 @@ def adapt_direction(distance_sensors_value):
     min(distance_sensors_value[0], distance_sensors_value[2]) < 0.3 
         and count < 4
     ):
-        second = random.randint(100, 300)
+        degree = random.randint(30, 90)
         if distance_sensors_value[0] < distance_sensors_value[2]:
-            turn_right_milisecond(second)
+            rotate_in_place(degree, 'right')
             last_turn = 'right'
         else:
-            turn_left_milisecond(second)
+            rotate_in_place(degree, 'left')
             last_turn = 'left'
 
         count += 1
@@ -187,29 +174,29 @@ def get_distances():
       
     return distance_sensors_value
 
-def draw_position_in_map():
-    pos = np.array(robot.getSelf().getPosition()[:2]) / RESOLUTION
-    map_x = int(MAP_SIZE//2 + int(pos[0]))
-    map_y = int(MAP_SIZE//2 - np.ceil(pos[1]))
+def convert_to_map_coordinates(x, y):
+    # Convert Webots coordinates to map coordinates
+    map_x = MAP_SIZE//2 + int(x / RESOLUTION)
+    map_y = MAP_SIZE//2 - np.ceil(y / RESOLUTION)
+    return int(map_x), int(map_y)
 
+def draw_position_in_map():
+    pos = np.array(robot.getSelf().getPosition()[:2])
+    map_x, map_y = convert_to_map_coordinates(pos[0], pos[1])
     for i in [-3, -2, -1, 0, 1, 2, 3]:
         for j in [-3, -2, -1, 0, 1, 2, 3]:
-            grid_map[map_y+j][map_x+i] = 255
+            visual_map[map_y+j][map_x+i] = 255
 
-def simple_plan(target, tolerance=0.2):
-    """
-    Navigate the robot to the given `target = (x, y)` position in Webots coordinates.
-    Uses compass for orientation and distance sensors for simple obstacle avoidance.
-    
-    Parameters:
-        target (np.array): target position as [x, y] in meters.
-        tolerance (float): distance threshold to consider the target "reached".
-    """
+def get_position():
+    pos = robot.getSelf().getPosition()
+    return np.array([pos[0], pos[1]])
 
-    def get_position():
-        # Get current robot position (x, y)
-        pos = robot.getSelf().getPosition()
-        return np.array([pos[0], pos[1]])
+def get_map_position():
+    pos = get_position()
+    map_x, map_y = convert_to_map_coordinates(pos[0], pos[1])
+    return np.array([map_x, map_y])
+
+def simple_plan(map_target, tolerance=0.2):
 
     def angle_to_target(current_pos, target_pos):
         # Compute angle (in degrees) from current position to target position
@@ -238,8 +225,9 @@ def simple_plan(target, tolerance=0.2):
 
         stop_motor()
 
-    current_pos = get_position()
-    distance = np.linalg.norm(target - current_pos)
+    current_pos = get_map_position()
+
+    distance = np.linalg.norm(map_target - current_pos)
 
     if distance < tolerance:
         print("[mvc_plan] Reached target!")
@@ -247,7 +235,7 @@ def simple_plan(target, tolerance=0.2):
         return
 
     # Face the robot toward the target position
-    desired_heading = angle_to_target(current_pos, target)
+    desired_heading = angle_to_target(current_pos, map_target)
     rotate_to_heading(desired_heading)
 
     # Check and avoid obstacles in front
@@ -262,44 +250,68 @@ def simple_plan(target, tolerance=0.2):
     rear_left_motor.setVelocity(motor_speed[0])
     rear_right_motor.setVelocity(motor_speed[1])
 
+def get_local_target():
+    current_pos = get_position()
+    map_x, map_y = convert_to_map_coordinates(current_pos[0], current_pos[1])
+    r = 20
 
-g_count = 0 
+    intersect_list = []
+    for x_border in [-r, r]:
+        for j in range(-r, r+1):
+            if grid_map[map_y+j, map_x+x_border] == 100:
+                visual_map[map_y+j, map_x+x_border] = (0,0,255)
+                intersect_list.append(np.array([map_x+x_border, map_y+j]))
 
-# Main loop
-try:
-    while robot.step(TIME_STEP) != -1:
+    for y_border in [-r, r]:
+        for i in range(-r, r+1):
+            if grid_map[map_y+y_border, map_x+i] == 100:
+                visual_map[map_y+y_border, map_x+i] = (0,0,255)
+                intersect_list.append(np.array([map_x+i, map_y+y_border]))
 
-        pos = np.array(robot.getSelf().getPosition()[:2]) / RESOLUTION
-        print("Position: ", pos)
+    if len(intersect_list) == 0:
+        print("No intersection found")
+        return np.array([map_x+r, map_y+r])
+    else:
+        dist = [np.linalg.norm(intersect_point - np.array([map_x, map_y])) for intersect_point in intersect_list]
+        print('--',intersect_list[np.argmin(dist)])
+        return intersect_list[np.argmin(dist)]
+    
+def main():
+    try:
+        pcount = 0  
+        while robot.step(TIME_STEP) != -1:
+
+            target = get_local_target()
+            print("Target: ", target)
+            # grid_map[int(target[1])][int(target[0])] = 255
+            draw_position_in_map()
+
+            # distance_sensors_value = get_distances()
+            # adapt_direction(distance_sensors_value)
+
+            # motor_speed = [8, 8]
+
+            # front_left_motor.setVelocity(motor_speed[0])
+            # front_right_motor.setVelocity(motor_speed[1])
+            # rear_left_motor.setVelocity(motor_speed[0])
+            # rear_right_motor.setVelocity(motor_speed[1])
+
+            map_resized = cv2.resize(visual_map, (500, 500))
+            cv2.imshow("Occupancy Grid Map", map_resized)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+            
+            if pcount == 5:
+                simple_plan(target)
+                pcount = 0
+
+            pcount += 1
+            # time.sleep(0.5)
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        exit(0)
+        pass
 
 
-        # distance_sensors_value = get_distances()
-        # adapt_direction(distance_sensors_value)
-
-        # motor_speed = [8, 8]
-
-        # front_left_motor.setVelocity(motor_speed[0])
-        # front_right_motor.setVelocity(motor_speed[1])
-        # rear_left_motor.setVelocity(motor_speed[0])
-        # rear_right_motor.setVelocity(motor_speed[1])
-
-        # # Hiển thị bản đồ
-        # if g_count % 100 == 0:
-        #     np.savetxt("../array.csv", grid_map, delimiter=",", fmt="%d")
-        #     map_img = Image.fromarray(grid_map, mode='L')
-        #     map_img.save("../map.png")
-
-
-        # map_resized = cv2.resize(grid_map, (500, 500))  
-        # cv2.imshow("Occupancy Grid Map", map_resized)
-        # if cv2.waitKey(1) & 0xFF == ord('q'):
-        #         break
-
-        # g_count += 1
-
-        target_position = np.array([0, 0])  # Example target coordinates in meters
-        simple_plan(target_position)
-
-except:
-    exit(0)
-    pass
+main()
