@@ -8,8 +8,8 @@ EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/project
 WorldInfo {
 }
 Viewpoint {
-  orientation -0.5773502691896258 0.5773502691896258 0.5773502691896258 2.0944
-  position 0.34387976074830046 0.7259824329463163 16.525927695089713
+  orientation -0.5754161189814869 0.5811992439891287 0.5754161353340282 2.088636151886481
+  position 0.03149798596590194 0.7636576829419379 11.237960482590056
 }
 TexturedBackground {
   texture "empty_office"
@@ -20,58 +20,10 @@ TexturedBackground {
   ]
 }
 Rosbot {
-  hidden position_0_0 -6.3748192729747535
-  hidden position_0_1 12.484597748438704
-  hidden position_0_2 -6.37481921106358
-  hidden position_0_3 12.484597298884244
-  hidden rotation_2 0 1 0 6.19155134138442
-  hidden rotation_3 0 -1 0 0.08177286592047116
-  hidden rotation_4 0 1 0 6.191551403295595
-  hidden rotation_5 0 -1 0 0.0817733154749284
-  translation -1.34227 1.17556 4.55576e-05
-  rotation 0.00022466980731559717 5.937318608070213e-05 0.9999999729991508 -2.7701740053471244
+  translation -2.23221 1.53557 -0.000562756
+  rotation 0 -1 0 0
   controller "rosbot_python"
   supervisor TRUE
-}
-Solid {
-  translation -1.64388 0.0934154 0.18
-  rotation 0 0 1 -1.3089953071795861
-  children [
-    Shape {
-      appearance PBRAppearance {
-        baseColor 1 0 0
-        roughness 1
-        metalness 0
-      }
-      geometry Box {
-        size 0.5 0.02 0.5
-      }
-    }
-  ]
-  name "WallRed(3)"
-  boundingObject Box {
-    size 0.5 0.02 0.5
-  }
-}
-Solid {
-  translation -1.75532 0.504263 0.18
-  rotation 0 0 1 1.8326
-  children [
-    Shape {
-      appearance PBRAppearance {
-        baseColor 1 0 0
-        roughness 1
-        metalness 0
-      }
-      geometry Box {
-        size 0.5 0.02 0.5
-      }
-    }
-  ]
-  name "WallRed(4)"
-  boundingObject Box {
-    size 0.5 0.02 0.5
-  }
 }
 Solid {
   translation -2.15303 1.14735 0.18
@@ -154,7 +106,7 @@ Solid {
   }
 }
 Solid {
-  translation 1.28 0.83 0.25
+  translation 1.28 -0.66 0.25
   children [
     Shape {
       appearance PBRAppearance {

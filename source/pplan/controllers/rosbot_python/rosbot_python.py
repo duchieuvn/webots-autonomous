@@ -152,9 +152,10 @@ def adapt_direction(distance_sensors_value):
             go_backward_milisecond(200)
         
         if last_turn == 0:
-            turn_left_milisecond(800)
+            rotate_in_place(120, 'left')
         else:
-            turn_right_milisecond(800)
+            rotate_in_place(120, 'right')
+
 
 def calculate_velocity(distance_sensors_value):
     coefficients = [[15.0, -9.0], [-15.0, 9.0]]
@@ -253,7 +254,7 @@ def simple_plan(map_target, tolerance=0.2):
 def get_local_target():
     current_pos = get_position()
     map_x, map_y = convert_to_map_coordinates(current_pos[0], current_pos[1])
-    r = 20
+    r = 10
 
     intersect_list = []
     for x_border in [-r, r]:
@@ -276,6 +277,95 @@ def get_local_target():
         print('--',intersect_list[np.argmin(dist)])
         return intersect_list[np.argmin(dist)]
     
+def dwa_planner(current_pos, current_heading_deg, map_target, distance_sensor_data, config):
+    max_v = config['max_v']
+    max_w = config['max_w']
+    v_samples = config['v_samples']
+    w_samples = config['w_samples']
+    predict_time = config['predict_time']
+    robot_radius = config['robot_radius']
+    dt = config['dt']
+
+    best_score = -float('inf')
+    best_v = 0.0
+    best_w = 0.0
+
+    for v in np.linspace(0, max_v, v_samples):
+        for w in np.linspace(-max_w, max_w, w_samples):
+            x, y = current_pos
+            #  theta = angle from robot to Norht (Oy)
+            theta = np.radians(current_heading_deg)
+
+            collision = False
+            for _ in np.arange(0, predict_time, dt):
+                x += v * np.cos(theta) * dt
+                y += v * np.sin(theta) * dt
+                theta += w * dt
+
+                if min(distance_sensor_data[0], distance_sensor_data[1]) < robot_radius:
+                    collision = True
+                    break
+
+            if collision:
+                continue
+
+            target_dx = map_target[0] - x
+            target_dy = map_target[1] - y
+            # heading_to_goal = angle from target to 
+            # heading_to_goal = np.arctan2(target_dy, target_dx) 
+            # heading_diff = abs(((heading_to_goal + np.pi - theta) % (2 * np.pi)) - np.pi)
+
+            heading_to_goal = (np.pi/2 - np.arctan2(target_dy, target_dx)) % (2*np.pi)
+            heading_diff = abs((heading_to_goal - theta))
+
+            score = -heading_diff + 0.5 * v
+
+            if score > best_score:
+                best_score = score
+                best_v = v
+                best_w = w
+
+    return best_v, best_w
+
+def velocity_to_wheel_speeds(v, w, wheel_base, wheel_radius):
+    v_left = v + (wheel_base / 2.0) * w
+    v_right = v - (wheel_base / 2.0) * w
+    left_speed = v_left / wheel_radius
+    right_speed = v_right / wheel_radius
+    return left_speed, right_speed
+
+def dwa_plan(map_target, tolerance=0.2):
+    current_pos = get_map_position()
+    distance = np.linalg.norm(map_target - current_pos)
+
+    if distance < tolerance:
+        print("[dwa_plan] Reached target!")
+        stop_motor()
+        return
+
+    heading = get_heading_deg()
+    sensor_data = get_distances()[:2]  # Use front-left and front-right sensors
+
+    config = {
+        'max_v': 0.3,
+        'max_w': 1.5,
+        'v_samples': 3,
+        'w_samples': 3,
+        'predict_time': 1.0,
+        'dt': 0.1,
+        'robot_radius': 0.3
+    }
+
+    v, w = dwa_planner(current_pos, heading, map_target, sensor_data, config)
+
+    left_speed, right_speed = velocity_to_wheel_speeds(v, w, AXLE_LENGTH, WHEEL_RADIUS)
+
+    front_left_motor.setVelocity(left_speed)
+    rear_left_motor.setVelocity(left_speed)
+    front_right_motor.setVelocity(right_speed)
+    rear_right_motor.setVelocity(right_speed)
+
+
 def main():
     try:
         pcount = 0  
@@ -301,9 +391,7 @@ def main():
             if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
             
-            if pcount == 5:
-                simple_plan(target)
-                pcount = 0
+            dwa_plan(target)
 
             pcount += 1
             # time.sleep(0.5)
