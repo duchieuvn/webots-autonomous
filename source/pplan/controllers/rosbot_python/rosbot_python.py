@@ -86,6 +86,11 @@ class MyRobot:
         map_x = MAP_SIZE // 2 + int(x / RESOLUTION)
         map_y = MAP_SIZE // 2 - int(np.ceil(y / RESOLUTION))
         return int(map_x), int(map_y)
+    
+    def convert_to_world_coordinates(self, map_x, map_y):
+        x = (map_x - MAP_SIZE // 2) * RESOLUTION
+        y = (MAP_SIZE // 2 - map_y) * RESOLUTION
+        return float(x), float(y)
 
     def draw_position_in_map(self, visual_map):
         pos = self.get_position()
@@ -124,6 +129,15 @@ class MyRobot:
             return intersect_list[np.argmin(dist)]
 
     def dwa_planner(self, map_target, config):
+        config = {
+            'max_v': 0.3,
+            'max_w': 1.5,
+            'v_samples': 3,
+            'w_samples': 3,
+            'predict_time': 1.0,
+            'dt': 0.1,
+            'robot_radius': 0.3
+        }
         max_v = config['max_v']
         max_w = config['max_w']
         v_samples = config['v_samples']
@@ -141,6 +155,7 @@ class MyRobot:
 
         for v in np.linspace(0.01, max_v, v_samples):
             for w in np.linspace(-max_w, max_w, w_samples):
+                print("v: ", v, "w: ", w)
                 cx, cy, ct = x, y, theta
                 collision = False
                 for _ in np.arange(0, predict_time, dt):
@@ -150,6 +165,7 @@ class MyRobot:
 
                     distance_sensor_data = self.get_distances()
                     if min(distance_sensor_data[0], distance_sensor_data[1]) < robot_radius:
+                        print("Collision detected!")
                         collision = True
                         break
 
@@ -158,8 +174,9 @@ class MyRobot:
 
                 heading_diff = self.get_angle_diff(map_target)
                 score = -heading_diff + 0.5 * v
-
+                print(f"Heading diff: {heading_diff}  Score: {score}")
                 if score > best_score:
+                    print(f"New best score: {score}")
                     best_score = score
                     best_v = v
                     best_w = w
@@ -191,8 +208,8 @@ class MyRobot:
         print("Left speed: ", left_speed, "Right speed: ", right_speed)
 
         self.set_motor_velocity(left_speed, right_speed, left_speed, right_speed)
+    
 
-robot = MyRobot()
 
 def velocity_to_wheel_speeds(v, w, wheel_base, wheel_radius):
     v_left = v + (wheel_base / 2.0) * w
@@ -200,6 +217,8 @@ def velocity_to_wheel_speeds(v, w, wheel_base, wheel_radius):
     left_speed = v_left / wheel_radius
     right_speed = v_right / wheel_radius
     return left_speed, right_speed
+
+robot = MyRobot()
 
 def main():
     try:
