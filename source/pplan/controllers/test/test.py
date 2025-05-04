@@ -78,13 +78,7 @@ visual_map = cv2.cvtColor(visual_map, cv2.COLOR_BGR2RGB)
 try:
     pcount = 0  
     while robot.step(TIME_STEP) != -1 and pcount < 1:
-        compass_values = compass.getValues()
-        print('compass_values', compass_values)
-        rad = np.arctan2(compass_values[1], compass_values[0])  # y/x
-        print('rad', rad)
-        deg = np.degrees(rad)
-        print('deg', deg)
-        heading = (deg + 360) % 360
+        heading = robot.getSelf().getOrientation()
         print('heading', heading)
 
         pcount += 1
