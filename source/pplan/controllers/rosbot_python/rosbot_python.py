@@ -22,6 +22,9 @@ class MyRobot:
     def __init__(self):
         self.robot, self.motors, self.wheel_sensors, self.imu, self.camera_rgb, self.camera_depth, self.lidar, self.distance_sensors = setup_robot()
         self.grid_map = grid_map
+        self.wheel_radius = WHEEL_RADIUS
+        self.axle_length = AXLE_LENGTH
+
 
     def step(self, timestep):
         return self.robot.step(timestep)
@@ -36,11 +39,19 @@ class MyRobot:
         self.motors['rl'].setVelocity(rl)
         self.motors['rr'].setVelocity(rr)
 
+    def velocity_to_wheel_speeds(self, v, w):
+        v_left = v + (self.axle_length / 2.0) * w
+        v_right = v - (self.axle_length / 2.0) * w
+        left_speed = v_left / self.wheel_radius
+        right_speed = v_right / self.wheel_radius
+        return left_speed, right_speed
+
     def go_backward_millisecond(self, ms=200):
         self.set_motor_velocity(-4, -4, -4, -4)
         self.step(ms)
 
     def get_heading(self, type='deg'):
+        """Get the angle between robot heading and X-axis in world coordinates."""
         orientation = self.robot.getSelf().getOrientation()
         dir_x = orientation[0]
         dir_y = orientation[1]
@@ -128,7 +139,7 @@ class MyRobot:
             print('--',intersect_list[np.argmin(dist)])
             return intersect_list[np.argmin(dist)]
 
-    def dwa_planner(self, map_target, config):
+    def dwa_planner(self, world_target, config):
         config = {
             'max_v': 0.3,
             'max_w': 1.5,
@@ -138,6 +149,7 @@ class MyRobot:
             'dt': 0.1,
             'robot_radius': 0.3
         }
+
         max_v = config['max_v']
         max_w = config['max_w']
         v_samples = config['v_samples']
@@ -150,7 +162,7 @@ class MyRobot:
         best_v = 0.0
         best_w = 0.0
 
-        x, y = self.get_map_position()
+        x, y = self.get_position()
         theta = self.get_heading('rad')
 
         for v in np.linspace(0.01, max_v, v_samples):
@@ -184,13 +196,12 @@ class MyRobot:
         return best_v, best_w
 
     def dwa_plan(self, map_target, tolerance=0.2):
-        current_pos = self.get_map_position()
-        distance = np.linalg.norm(map_target - current_pos)
+        # distance = np.linalg.norm(map_target - current_pos)
 
-        if distance < tolerance:
-            print("[dwa_plan] Reached target!")
-            self.stop_motor()
-            return
+        # if distance < tolerance:
+        #     print("[dwa_plan] Reached target!")
+        #     self.stop_motor()
+        #     return
 
         config = {
             'max_v': 0.3,
@@ -201,8 +212,9 @@ class MyRobot:
             'dt': 0.1,
             'robot_radius': 0.3
         }
-
-        v, w = self.dwa_planner(map_target, config)
+        
+        world_target = self.convert_to_world_coordinates(map_target[0], map_target[1])
+        v, w = self.dwa_planner(world_target, config)
 
         left_speed, right_speed = velocity_to_wheel_speeds(v, w, AXLE_LENGTH, WHEEL_RADIUS)
         print("Left speed: ", left_speed, "Right speed: ", right_speed)
@@ -211,12 +223,7 @@ class MyRobot:
     
 
 
-def velocity_to_wheel_speeds(v, w, wheel_base, wheel_radius):
-    v_left = v + (wheel_base / 2.0) * w
-    v_right = v - (wheel_base / 2.0) * w
-    left_speed = v_left / wheel_radius
-    right_speed = v_right / wheel_radius
-    return left_speed, right_speed
+
 
 robot = MyRobot()
 
