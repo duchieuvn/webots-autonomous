@@ -8,8 +8,8 @@ EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/project
 WorldInfo {
 }
 Viewpoint {
-  orientation -0.5754161189814869 0.5811992439891287 0.5754161353340282 2.088636151886481
-  position 0.03148926619832436 0.7636491358245511 8.184569485862308
+  orientation -0.5773502691896258 0.5773502691896258 0.5773502691896258 2.0944
+  position 6.987583490516599 0.4974697565194799 29.661481366087123
 }
 TexturedBackground {
   texture "empty_office"
@@ -20,38 +20,18 @@ TexturedBackground {
   ]
 }
 Rosbot {
-  hidden position_0_0 -3.870941907164703e-08
-  hidden position_0_1 -3.875438312061311e-08
-  hidden position_0_2 3.795679773442559e-08
-  hidden position_0_3 3.80017823523343e-08
-  hidden rotation_2 0 -1 0 4.2146848510894035e-08
-  hidden rotation_3 0 -1 0 4.2146848510894035e-08
-  hidden rotation_4 0 1 0 4.2146848510894035e-08
-  hidden rotation_5 0 1 0 4.2146848510894035e-08
-  translation -1.3922100000014006 1.5355699999990329 -0.00056258529135568
-  rotation 0.003333059263534299 0.9999944453425441 -5.8516548181187245e-08 3.178874181052572e-05
-  controller "rosbot_python"
+  hidden position_0_0 3.0565077438156284e-08
+  hidden position_0_1 -3.059729746372853e-08
+  hidden position_0_2 2.997048214239982e-08
+  hidden position_0_3 -3.000346474668328e-08
+  hidden rotation_2 0 1 0 2.9802322387695313e-08
+  hidden rotation_3 0 -1 0 2.9802322387695313e-08
+  hidden rotation_4 0 1 0 2.9802322387695313e-08
+  hidden rotation_5 0 -1 0 2.9802322387695313e-08
+  translation -1.4122099999999473 1.7455700000011891 -0.0005624469539143861
+  rotation 0.20701303250995023 0.9699191523190254 0.12807202011281582 3.1871e-05
+  controller "test"
   supervisor TRUE
-}
-Solid {
-  translation -2.15303 1.14735 0.18
-  rotation 0 0 1 0.785403
-  children [
-    Shape {
-      appearance PBRAppearance {
-        baseColor 1 0 0
-        roughness 1
-        metalness 0
-      }
-      geometry Box {
-        size 0.5 0.02 0.5
-      }
-    }
-  ]
-  name "WallRed(7)"
-  boundingObject Box {
-    size 0.5 0.02 0.5
-  }
 }
 Solid {
   translation 0.121532 2.89018 0.18

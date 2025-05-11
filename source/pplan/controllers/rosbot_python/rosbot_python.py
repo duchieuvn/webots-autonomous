@@ -8,9 +8,12 @@ import time
 import cv2
 
 TIME_STEP = 32
-MAX_VELOCITY = 26
+MAX_VELOCITY = 26 
+# v = w * r => v_max = 26 * 0.043 = 1.118 m/s
 WHEEL_RADIUS = 0.043  # meters
 AXLE_LENGTH = 0.18    # meters (distance between left and right wheels)
+
+OBSTACLE_VALUE = 255
 
 MAP_SIZE = 1000 # 1000cm = 10m
 RESOLUTION = 0.01 # 1cm for 1 grid cell
@@ -33,21 +36,23 @@ class MyRobot:
         for motor in self.motors.values():
             motor.setVelocity(0)
 
-    def set_motor_velocity(self, fl, fr, rl, rr):
-        self.motors['fl'].setVelocity(fl)
-        self.motors['fr'].setVelocity(fr)
-        self.motors['rl'].setVelocity(rl)
-        self.motors['rr'].setVelocity(rr)
+    def set_robot_velocity(self, left_speed, right_speed):
+        self.motors['fl'].setVelocity(left_speed)
+        self.motors['rl'].setVelocity(left_speed)
+        self.motors['fr'].setVelocity(right_speed)
+        self.motors['rr'].setVelocity(right_speed)
 
     def velocity_to_wheel_speeds(self, v, w):
-        v_left = v + (self.axle_length / 2.0) * w
-        v_right = v - (self.axle_length / 2.0) * w
+        '''Convert linear and angular velocity to left and right wheel speeds.'''
+        v_left = v - (self.axle_length / 2.0) * w
+        v_right = v + (self.axle_length / 2.0) * w
         left_speed = v_left / self.wheel_radius
         right_speed = v_right / self.wheel_radius
+
         return left_speed, right_speed
 
     def go_backward_millisecond(self, ms=200):
-        self.set_motor_velocity(-4, -4, -4, -4)
+        self.set_robot_velocity(-4, -4)
         self.step(ms)
 
     def get_heading(self, type='deg'):
@@ -110,7 +115,7 @@ class MyRobot:
             for j in range(-3, 4):
                 visual_map[map_y + j][map_x + i] = 255
 
-    def get_local_target(self, last_target=None):
+    def get_local_target(self):
         map_x, map_y = self.get_map_position()
         r = 10
 
@@ -119,7 +124,7 @@ class MyRobot:
             for j in range(-r, r+1):
                 point_x = map_x + x_border
                 point_y = map_y + j
-                if self.grid_map[point_y, point_x] == 100 and self.get_angle_diff([point_x, point_y]) <= 45:
+                if self.grid_map[point_y, point_x] == 100 and self.get_angle_diff([point_x, point_y]) <= 90:
                     visual_map[point_y, point_x] = (0,0,255)
                     intersect_list.append(np.array([point_x, point_y]))
 
@@ -127,71 +132,82 @@ class MyRobot:
             for i in range(-r, r+1):
                 point_x = map_x + i
                 point_y = map_y + y_border
-                if self.grid_map[point_y, point_x] == 100 and self.get_angle_diff([point_x, point_y]) <= 45:
+                if self.grid_map[point_y, point_x] == 100 and self.get_angle_diff([point_x, point_y]) <= 90:
                     visual_map[point_y, point_x] = (0,0,255)
                     intersect_list.append(np.array([point_x, point_y]))
 
         if len(intersect_list) == 0:
             print("No intersection found")
-            return last_target
+            return None
         else:
             dist = [np.linalg.norm(intersect_point - np.array([map_x, map_y])) for intersect_point in intersect_list]
-            print('--',intersect_list[np.argmin(dist)])
             return intersect_list[np.argmin(dist)]
 
-    def dwa_planner(self, world_target, config):
-        config = {
-            'max_v': 0.3,
-            'max_w': 1.5,
-            'v_samples': 3,
-            'w_samples': 3,
-            'predict_time': 1.0,
-            'dt': 0.1,
-            'robot_radius': 0.3
-        }
+    def there_is_obstacle(self, map_target):
+        if self.grid_map[map_target[1], map_target[0]] == OBSTACLE_VALUE:
+            return True
+        return False
 
-        max_v = config['max_v']
-        max_w = config['max_w']
-        v_samples = config['v_samples']
-        w_samples = config['w_samples']
-        predict_time = config['predict_time']
-        robot_radius = config['robot_radius']
-        dt = config['dt']
+    def dwa_planner(self, world_target):
+        MAX_SPEED = MAX_VELOCITY * self.wheel_radius
+        
+        v_samples = [0.08, 0.1, 0.15, 0.2, 0.5]
+        # w_samples = [0.2, 0.5, 1, 1.5]
+        w_samples = [0.2, -0.2, 0.5, -0.5, 0, 1, -1, 1.5, -1.5]
+        # w_samples += [-w for w in w_samples]
 
         best_score = -float('inf')
+        min_error = float('inf')
         best_v = 0.0
         best_w = 0.0
 
         x, y = self.get_position()
         theta = self.get_heading('rad')
+        current_distance = np.linalg.norm(world_target - np.array([x, y]))
 
-        for v in np.linspace(0.01, max_v, v_samples):
-            for w in np.linspace(-max_w, max_w, w_samples):
-                print("v: ", v, "w: ", w)
+        dt = TIME_STEP / 1000 # Convert TIME_STEP to seconds
+        for v in v_samples:
+            for w in w_samples:
                 cx, cy, ct = x, y, theta
-                collision = False
-                for _ in np.arange(0, predict_time, dt):
+                worse_path = False
+                # Predict the position in 5 TIME_STEP intervals
+                for _ in range(0, 5):
                     cx += v * np.cos(ct) * dt
                     cy += v * np.sin(ct) * dt
                     ct += w * dt
 
-                    distance_sensor_data = self.get_distances()
-                    if min(distance_sensor_data[0], distance_sensor_data[1]) < robot_radius:
-                        print("Collision detected!")
-                        collision = True
+                    predicted_map_x, predicted_map_y = self.convert_to_map_coordinates(cx, cy)
+                    if self.there_is_obstacle([predicted_map_x, predicted_map_y]):
+                        print(f"Obstacle detected at ({predicted_map_x}, {predicted_map_y})")
+                        worse_path = True
                         break
-
-                if collision:
+                    
+                    predicted_distance = np.linalg.norm(world_target - np.array([cx, cy]))
+                    if predicted_distance > current_distance + 0.1:
+                        print(f"Predicted distance is worse: {predicted_distance} > {current_distance}")
+                        worse_path = True
+                        break
+                
+                if worse_path:
                     continue
+                
+                # predicted_angle_to_target = np.arctan2(cy-world_target[1], cx-world_target[0])
+                predicted_angle_to_target = np.arctan2(world_target[1]-cy, world_target[0]-cx)
+                heading_error = get_angle_diff(predicted_angle_to_target, ct)
 
-                heading_diff = self.get_angle_diff(map_target)
-                score = -heading_diff + 0.5 * v
-                print(f"Heading diff: {heading_diff}  Score: {score}")
-                if score > best_score:
-                    print(f"New best score: {score}")
-                    best_score = score
+                error = 4*np.sin(heading_error) + 2*predicted_distance + 0.5*(MAX_SPEED - v)
+                if error < min_error:
+
+                    print(f"v: {v}, w: {w}")
+                    print(f"Predicted angle to target: {np.degrees(predicted_angle_to_target)}")
+                    print(f"Heading error: {np.degrees(heading_error)}")
+                    print(f"Distance: {current_distance} {predicted_distance}")
+                    print(f"New min error: {error}")
+                    min_error = error
                     best_v = v
                     best_w = w
+
+
 
         return best_v, best_w
 
@@ -203,26 +219,21 @@ class MyRobot:
         #     self.stop_motor()
         #     return
 
-        config = {
-            'max_v': 0.3,
-            'max_w': 1.5,
-            'v_samples': 3,
-            'w_samples': 3,
-            'predict_time': 1.0,
-            'dt': 0.1,
-            'robot_radius': 0.3
-        }
-        
         world_target = self.convert_to_world_coordinates(map_target[0], map_target[1])
-        v, w = self.dwa_planner(world_target, config)
+        v, w = self.dwa_planner(world_target)
 
-        left_speed, right_speed = velocity_to_wheel_speeds(v, w, AXLE_LENGTH, WHEEL_RADIUS)
+        left_speed, right_speed = self.velocity_to_wheel_speeds(v, w)
         print("Left speed: ", left_speed, "Right speed: ", right_speed)
 
-        self.set_motor_velocity(left_speed, right_speed, left_speed, right_speed)
-    
+        self.set_robot_velocity(left_speed, right_speed)
 
-
+def get_angle_diff(a, b):
+        diff = a - b
+        while diff > np.pi:
+            diff -= 2*np.pi
+        while diff < -np.pi:
+            diff += 2*np.pi
+        return diff
 
 
 robot = MyRobot()
@@ -232,9 +243,9 @@ def main():
         pcount = 0
         last_target = robot.get_map_position()
         while robot.step(TIME_STEP) != -1:
-            target = robot.get_local_target(last_target)
-            last_target = target if target is not None else last_target
-            print("Target: ", target)
+            _target = robot.get_local_target()
+            target = _target if _target is not None else last_target
+            last_target = target
             robot.draw_position_in_map(visual_map)
 
             map_resized = cv2.resize(visual_map, (500, 500))
@@ -242,8 +253,10 @@ def main():
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 
+            print("Target: ", target)
             robot.dwa_plan(target)
-            # time.sleep(0.1)
+            print('---------------------------')
+            # time.sleep(1)
 
     except Exception as e:
         print("An error occurred:", e)
