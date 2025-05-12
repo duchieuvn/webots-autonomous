@@ -20,38 +20,18 @@ TexturedBackground {
   ]
 }
 Rosbot {
-  hidden position_0_0 3.0565077438156284e-08
-  hidden position_0_1 -3.059729746372853e-08
-  hidden position_0_2 2.997048214239982e-08
-  hidden position_0_3 -3.000346474668328e-08
-  hidden rotation_2 0 1 0 2.9802322387695313e-08
-  hidden rotation_3 0 -1 0 2.9802322387695313e-08
-  hidden rotation_4 0 1 0 2.9802322387695313e-08
-  hidden rotation_5 0 -1 0 2.9802322387695313e-08
-  translation -1.4122099999999473 1.7455700000011891 -0.0005624469539143861
-  rotation 0.20701303250995023 0.9699191523190254 0.12807202011281582 3.1871e-05
+  hidden translation_2 0.05 0.11 0.043
+  hidden rotation_2 0 1 0 1.1545911375856817
+  hidden translation_3 0.05 -0.11 0.043
+  hidden rotation_3 0 1 0 4.549139332875846
+  hidden translation_4 -0.055 0.11 0.043
+  hidden rotation_4 0 1 0 1.1640080530354295
+  hidden translation_5 -0.055 -0.11 0.043
+  hidden rotation_5 0 1 0 4.549141068015625
+  translation -1.9101761961159176 1.4399290019173996 -0.0003272971936822272
+  rotation -0.007396717075800386 -0.002523777778737137 -0.9999694590947387 2.842339770435311
   controller "test"
   supervisor TRUE
-}
-Solid {
-  translation 0.121532 2.89018 0.18
-  rotation 0 0 -1 2.618
-  children [
-    Shape {
-      appearance RoughPine {
-        textureTransform TextureTransform {
-          scale 2 1
-        }
-      }
-      geometry Box {
-        size 1 0.05 0.5
-      }
-    }
-  ]
-  name "WallMedium(7)"
-  boundingObject Box {
-    size 1 0.05 0.5
-  }
 }
 Solid {
   translation 1.05373 3.14518 0.18
@@ -71,64 +51,6 @@ Solid {
   name "WallMedium(10)"
   boundingObject Box {
     size 1 0.05 0.5
-  }
-}
-Solid {
-  translation -2.3457 0.998906 0.18
-  rotation 0 0 1 -2.3561953071795863
-  children [
-    Shape {
-      appearance RoughPine {
-        textureTransform TextureTransform {
-          scale 2 1
-        }
-      }
-      geometry Box {
-        size 1 0.05 0.5
-      }
-    }
-  ]
-  name "WallMedium(25)"
-  boundingObject Box {
-    size 1 0.05 0.5
-  }
-}
-Solid {
-  translation 1.28 -0.66 0.25
-  children [
-    Shape {
-      appearance PBRAppearance {
-        baseColor 0 0 1
-        roughness 1
-        metalness 0
-      }
-      geometry Cylinder {
-        radius 0.1
-      }
-    }
-  ]
-  name "BlueCylinder"
-  boundingObject Cylinder {
-    radius 0.1
-  }
-}
-Solid {
-  translation -0.03 0.31 0.25
-  children [
-    Shape {
-      appearance PBRAppearance {
-        baseColor 1 1 0
-        roughness 1
-        metalness 0
-      }
-      geometry Cylinder {
-        radius 0.1
-      }
-    }
-  ]
-  name "YellowCylinder"
-  boundingObject Cylinder {
-    radius 0.1
   }
 }
 Floor {
