@@ -10,8 +10,6 @@ import time
 import cv2
 from visualization import Visualizer 
 
-TIME_STEP = 32
-
 def generate_random_curved_path(start_point, end_point):
     step_size = 50
     deviation = 5
@@ -66,15 +64,14 @@ def generate_path():
 
     return path
 
-vis = Visualizer()
-
 def main():
+    vis = Visualizer()
     robot = MyRobot()    
     path = generate_path()
     target_index = 0
     target = path[target_index]
 
-    while robot.step(TIME_STEP) != -1:
+    while robot.step() != -1:
         vis.visualize_game(robot, path, target)
 
         if robot.dwa_plan(target):

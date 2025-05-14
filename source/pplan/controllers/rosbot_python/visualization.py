@@ -47,11 +47,9 @@ class Visualizer():
         scale_x = window_size[0] / MAP_SIZE
         scale_y = window_size[1] / MAP_SIZE
         p1 = (current_pos[0] * scale_x, current_pos[1] * scale_y)
-
         heading_rad = robot.get_heading('rad')
         dir_vector = (np.cos(heading_rad), np.sin(heading_rad))
         p2 = (p1[0] + dir_vector[0] * 100, p1[1] - dir_vector[1] * 100)
-
         self.draw_infinite_line((0, 255, 0), p1, p2, width=2)
 
     def draw_infinite_line(self, color, p1, p2, width=2):

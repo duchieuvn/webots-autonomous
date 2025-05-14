@@ -2,6 +2,7 @@ import numpy as np
 from setup import setup_robot
 import cv2
 
+TIME_STEP = 32
 MAX_VELOCITY = 26
 WHEEL_RADIUS = 0.043
 AXLE_LENGTH = 0.18
@@ -23,12 +24,13 @@ def get_angle_diff(a, b):
 class MyRobot:
     def __init__(self):
         self.robot, self.motors, self.wheel_sensors, self.imu, self.camera_rgb, self.camera_depth, self.lidar, self.distance_sensors = setup_robot()
+        self.time_step = TIME_STEP
         self.grid_map = grid_map
         self.wheel_radius = WHEEL_RADIUS
         self.axle_length = AXLE_LENGTH
 
-    def step(self, timestep):
-        return self.robot.step(timestep)
+    def step(self):
+        return self.robot.step(self.time_step)
 
     def stop_motor(self):
         for motor in self.motors.values():
