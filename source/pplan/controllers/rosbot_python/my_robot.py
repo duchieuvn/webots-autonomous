@@ -2,7 +2,6 @@ import numpy as np
 from setup import setup_robot
 import cv2
 
-TIME_STEP = 32
 MAX_VELOCITY = 26
 WHEEL_RADIUS = 0.043
 AXLE_LENGTH = 0.18
@@ -94,13 +93,6 @@ class MyRobot:
         x = (map_x - MAP_SIZE // 2) * RESOLUTION
         y = (MAP_SIZE // 2 - map_y) * RESOLUTION
         return float(x), float(y)
-
-    def draw_position_in_map(self, visual_map):
-        pos = self.get_position()
-        map_x, map_y = self.convert_to_map_coordinates(pos[0], pos[1])
-        for i in range(-3, 4):
-            for j in range(-3, 4):
-                visual_map[map_y + j][map_x + i] = 255
 
     def dwa_planner(self, world_target):
         MAX_SPEED = MAX_VELOCITY * self.wheel_radius

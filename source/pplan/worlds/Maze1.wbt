@@ -20,17 +20,13 @@ TexturedBackground {
   ]
 }
 Rosbot {
-  hidden translation_2 0.05 0.11 0.043
   hidden rotation_2 0 1 0 1.1545911375856817
-  hidden translation_3 0.05 -0.11 0.043
   hidden rotation_3 0 1 0 4.549139332875846
-  hidden translation_4 -0.055 0.11 0.043
   hidden rotation_4 0 1 0 1.1640080530354295
-  hidden translation_5 -0.055 -0.11 0.043
   hidden rotation_5 0 1 0 4.549141068015625
   translation -1.9101761961159176 1.4399290019173996 -0.0003272971936822272
   rotation -0.007396717075800386 -0.002523777778737137 -0.9999694590947387 2.842339770435311
-  controller "test"
+  controller "rosbot_python"
   supervisor TRUE
 }
 Solid {
