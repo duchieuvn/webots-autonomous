@@ -50,6 +50,7 @@ class MyRobot:
         return left_speed, right_speed
 
     def get_heading(self, type='deg'):
+        # Calculate the angle from robot direction to the x-axis
         orientation = self.robot.getSelf().getOrientation()
         dir_x = orientation[0]
         dir_y = orientation[3]
@@ -82,9 +83,9 @@ class MyRobot:
         map_y = MAP_SIZE // 2 - int(np.ceil(y / RESOLUTION))
         return np.array([map_x, map_y])
 
-    def get_map_distance(self, target):
+    def get_map_distance(self, map_target):
         a = self.get_map_position()
-        return np.linalg.norm(a - np.array(target))
+        return np.linalg.norm(a - np.array(map_target))
 
     def convert_to_map_coordinates(self, x, y):
         map_x = MAP_SIZE // 2 + int(x / RESOLUTION)
@@ -109,11 +110,13 @@ class MyRobot:
         theta = self.get_heading('rad')
         current_distance = np.linalg.norm(world_target - np.array([x, y]))
 
-        dt = TIME_STEP / 1000
+        # Predict the robot's future position after 5 TIME_STEP
+        dt = TIME_STEP / 1000 # Convert to TIME_STEP to seconds
         for v in v_samples:
             for w in w_samples:
                 cx, cy, ct = x, y, theta
-                worse_path = False
+                good_path = True
+                # Calculate the robot position (cx, cy) after 5 steps
                 for _ in range(0, 5):
                     cx += v * np.cos(ct) * dt
                     cy += v * np.sin(ct) * dt
@@ -121,15 +124,16 @@ class MyRobot:
 
                     predicted_map_x, predicted_map_y = self.convert_to_map_coordinates(cx, cy)
                     if self.there_is_obstacle([predicted_map_x, predicted_map_y]):
-                        worse_path = True
+                        good_path = False
                         break
                     
+                    # If the furtue distance from the target is greater than the current distance
                     predicted_distance = np.linalg.norm(world_target - np.array([cx, cy]))
                     if predicted_distance > current_distance + 0.1:
-                        worse_path = True
+                        good_path = False
                         break
 
-                if worse_path:
+                if not good_path:
                     continue
 
                 predicted_angle_to_target = np.arctan2(world_target[1]-cy, world_target[0]-cx)
@@ -147,7 +151,7 @@ class MyRobot:
 
         return best_v, best_w
 
-    def dwa_plan(self, map_target):
+    def follow_local_target(self, map_target):
         if self.get_map_distance(map_target) < 2:
             self.stop_motor()
             return True
@@ -163,3 +167,14 @@ class MyRobot:
             return True
         return False
 
+    def path_following_pipeline(self, path):
+        for target in path:
+            while self.step() != -1:
+                if self.follow_local_target(target):
+                    break
+        self.stop_motor()
+
+    def explore(self):
+        self.go_and_avoid_obstacles()
+
+        return self.grid_map, start_point, end_point

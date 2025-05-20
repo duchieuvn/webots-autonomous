@@ -74,7 +74,7 @@ def main():
     while robot.step() != -1:
         vis.visualize_game(robot, path, target)
 
-        if robot.dwa_plan(target):
+        if robot.follow_local_target(target):
             target_index += 1
             if target_index < len(path):
                 target = path[target_index]
