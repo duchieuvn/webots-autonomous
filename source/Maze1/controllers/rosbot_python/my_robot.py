@@ -7,10 +7,10 @@ TIME_STEP = 32
 MAX_VELOCITY = 26
 WHEEL_RADIUS = 0.043
 AXLE_LENGTH = 0.18
-OBSTACLE_VALUE = 1
-PATH_VALUE = 255
 MAP_SIZE = 1000
 RESOLUTION = 0.01
+
+OBSTACLE_VALUE = 1
 
 grid_map = cv2.imread('../../textures/path_test_map.bmp', cv2.IMREAD_GRAYSCALE)
 
@@ -167,15 +167,11 @@ class MyRobot:
         if self.grid_map[map_target[1], map_target[0]] == OBSTACLE_VALUE:
             return True
         return False
-
-
+    
     def explore(self):
-
         start_point = [200, 250]
         end_point = [600, 500]
-
-        return self.grid_map, start_point, end_point
-    
+        return self.grid_map, start_point, end_point 
 
     def find_path(self, start_point, end_point):
 
