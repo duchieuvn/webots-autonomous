@@ -35,6 +35,12 @@ class MyRobot:
     def step(self, time_step=TIME_STEP):
         return self.robot.step(time_step)
 
+    def is_turning(self):
+        # Check if the robot is turning
+        left_speed = self.motors['fl'].getVelocity()
+        right_speed = self.motors['fr'].getVelocity()
+        return abs(left_speed - right_speed) > 0.01
+
     def stop_motor(self):
         for motor in self.motors.values():
             motor.setVelocity(0)
@@ -119,7 +125,6 @@ class MyRobot:
         last_turn = 'right'
         distances = self.get_distances()
         while (min(distances[0], distances[2]) < 0.3 and count < 4):
-            print(f"Obstacle detected! Distances: {distances}")
             second = random.randint(100, 300)
             if distances[0] < distances[2]:
                 turn_right_milisecond(second)
@@ -308,7 +313,6 @@ class MyRobot:
         Returns:
             points_world: np.ndarray of shape (N, 2) — transformed points in world coordinates
         """
-        # Get robot pose
         x_robot, y_robot = self.get_position()
         theta = self.get_heading('rad')  # yaw
 
@@ -348,3 +352,24 @@ class MyRobot:
         points_map = points_scaled + t_map
 
         return points_map.astype(np.int32)
+
+    def draw_bresenham_line(self, map_target):
+        x1, y1 = self.get_map_position()
+        x2, y2 = map_target
+        dx = abs(x2 - x1)
+        dy = abs(y2 - y1)
+        sx = 1 if x1 < x2 else -1
+        sy = 1 if y1 < y2 else -1
+        err = dx - dy
+
+        while True:
+            self.grid_map[y1][x1] = FREESPACE_VALUE # Mark the line on the grid map
+            if x1 == x2 and y1 == y2:
+                break
+            err2 = err * 2
+            if err2 > -dy:
+                err -= dy
+                x1 += sx
+            if err2 < dx:
+                err += dx
+                y1 += sy

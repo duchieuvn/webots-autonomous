@@ -30,10 +30,7 @@ class Visualizer():
 
     def draw_robot(self, robot):
         current_pos = robot.get_map_position()
-
-        screen_x = int(current_pos[0] * self.window_size[0] / MAP_SIZE)
-        screen_y = int(current_pos[1] * self.window_size[1] / MAP_SIZE)
-
+        screen_x, screen_y = self.convert_map_to_screen(current_pos[0], current_pos[1])
         pygame.draw.circle(self.screen, (0, 0, 255), (screen_x, screen_y), 5)  # Bán kính = 5 pixel
 
 
@@ -50,8 +47,6 @@ class Visualizer():
         for point in scaled_path:
             pygame.draw.circle(self.screen, (255, 0, 0), point, 1)
     
-
-
     def draw_robot_to_target(self, robot, target):
         current_pos = robot.get_map_position()
         target_pos = target

@@ -35,6 +35,7 @@ def main():
     # robot.path_following_pipeline(path)
     
     running = True
+    count = 0
     while robot.step(robot.time_step) != -1 and running:
         for event in pygame.event.get():  # Xử lý tất cả sự kiện
             if event.type == pygame.QUIT:  # Nếu người dùng đóng cửa sổ
@@ -46,12 +47,16 @@ def main():
         points = robot.get_pointcloud_world_coordinates()
         map_points = robot.convert_to_map_coordinate_matrix(points)
         
-        cur_map_pos = robot.get_map_position()
-        for map_point in map_points:
-           vis.draw_line(cur_map_pos, map_point)
+        if count % 20 == 0 and not robot.is_turning():
+            for map_point in map_points:
+                robot.draw_bresenham_line(map_point)
+            #    vis.draw_line(cur_map_pos, map_point)
 
+        vis.update_screen_with_map(robot.grid_map)
         vis.draw_robot(robot)
         vis.display_screen()
+
+        count += 1
 
 
 main()  
