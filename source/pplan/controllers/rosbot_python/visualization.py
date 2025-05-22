@@ -92,3 +92,11 @@ class Visualizer():
         self.draw_robot_to_target(robot, target)
         self.draw_robot_orientation(robot)
         pygame.display.flip()
+
+    def update_screen_with_map(self, visual_map):
+        self.clear_screen()
+        map_surface = self.create_map_surface(visual_map)
+        self.screen.blit(map_surface, (0, 0))
+        pygame.display.flip()
+
+        

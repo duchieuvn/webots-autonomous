@@ -20,9 +20,26 @@ class Visualizer():
     def clear_screen(self):
         self.screen.fill((0,0,0))
 
+    def display_screen(self):
+        pygame.display.flip()
+
+    def convert_map_to_screen(self, map_x, map_y):
+        screen_x = int(map_x * self.window_size[0] / MAP_SIZE)
+        screen_y = int(map_y * self.window_size[1] / MAP_SIZE)
+        return screen_x, screen_y
+
+    def draw_robot(self, robot):
+        current_pos = robot.get_map_position()
+
+        screen_x = int(current_pos[0] * self.window_size[0] / MAP_SIZE)
+        screen_y = int(current_pos[1] * self.window_size[1] / MAP_SIZE)
+
+        pygame.draw.circle(self.screen, (0, 0, 255), (screen_x, screen_y), 5)  # Bán kính = 5 pixel
+
+
     def create_map_surface(self, visual_map):
         map_resized = cv2.resize(visual_map, window_size)
-        map_surface = pygame.surfarray.make_surface(np.transpose(map_resized, (1, 0, 2)))
+        map_surface = pygame.surfarray.make_surface(map_resized)
         return map_surface
 
     def draw_path(self, path):
@@ -32,6 +49,8 @@ class Visualizer():
 
         for point in scaled_path:
             pygame.draw.circle(self.screen, (255, 0, 0), point, 1)
+    
+
 
     def draw_robot_to_target(self, robot, target):
         current_pos = robot.get_map_position()
@@ -51,6 +70,11 @@ class Visualizer():
         dir_vector = (np.cos(heading_rad), np.sin(heading_rad))
         p2 = (p1[0] + dir_vector[0] * 100, p1[1] - dir_vector[1] * 100)
         self.draw_infinite_line((0, 255, 0), p1, p2, width=2)
+
+    def draw_line(self, map_p1, map_p2):
+        screen_p1 = self.convert_map_to_screen(map_p1[0], map_p1[1])
+        screen_p2 = self.convert_map_to_screen(map_p2[0], map_p2[1])
+        pygame.draw.line(self.screen, (0, 100, 100), screen_p1, screen_p2, 1)
 
     def draw_infinite_line(self, color, p1, p2, width=2):
         x1, y1 = p1
@@ -92,3 +116,9 @@ class Visualizer():
         self.draw_robot_to_target(robot, target)
         self.draw_robot_orientation(robot)
         pygame.display.flip()
+    
+    def update_screen_with_map(self, grid_map):
+        visual_map = np.stack([grid_map] * 3, axis=-1)
+        visual_map_rgb = np.transpose(visual_map, (1, 0, 2))
+        map_surface = self.create_map_surface(visual_map_rgb)
+        self.screen.blit(map_surface, (0, 0))

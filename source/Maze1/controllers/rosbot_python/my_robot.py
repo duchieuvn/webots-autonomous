@@ -11,8 +11,10 @@ MAP_SIZE = 1000
 RESOLUTION = 0.01
 
 OBSTACLE_VALUE = 1
+FREESPACE_VALUE = 0
+UNKNOWN_VALUE = 255
 
-grid_map = cv2.imread('../../textures/path_test_map.bmp', cv2.IMREAD_GRAYSCALE)
+grid_map = np.full((MAP_SIZE, MAP_SIZE), UNKNOWN_VALUE, dtype=np.uint8)
 
 def get_angle_diff(a, b):
         diff = a - b
@@ -30,8 +32,8 @@ class MyRobot:
         self.wheel_radius = WHEEL_RADIUS
         self.axle_length = AXLE_LENGTH
 
-    def step(self):
-        return self.robot.step(self.time_step)
+    def step(self, time_step=TIME_STEP):
+        return self.robot.step(time_step)
 
     def stop_motor(self):
         for motor in self.motors.values():
@@ -97,6 +99,49 @@ class MyRobot:
         x = (map_x - MAP_SIZE // 2) * RESOLUTION
         y = (MAP_SIZE // 2 - map_y) * RESOLUTION
         return float(x), float(y)
+
+    def adapt_direction(self):
+        def turn_right_milisecond(s=200):  
+            self.set_robot_velocity(4, -4)
+            self.step(s)
+
+        def turn_left_milisecond(s=200):
+            self.set_robot_velocity(-4, 4)
+            self.step(s)
+
+        def go_backward_milisecond(s=200):
+            self.set_robot_velocity(-4, -4)
+            self.step(s)
+
+        # while there is an obstacle in front
+        count = 0
+        self.stop_motor()
+        last_turn = 'right'
+        distances = self.get_distances()
+        while (min(distances[0], distances[2]) < 0.3 and count < 4):
+            print(f"Obstacle detected! Distances: {distances}")
+            second = random.randint(100, 300)
+            if distances[0] < distances[2]:
+                turn_right_milisecond(second)
+                last_turn = 'right'
+            else:
+                turn_left_milisecond(second)
+                last_turn = 'left'
+
+            count += 1
+
+            distances = self.get_distances()
+        
+        if count == 4:
+            # if there is an obstacle behind
+            if (min(distances[1], distances[3]) > 0.3):
+                go_backward_milisecond(200)
+            
+            if last_turn == 0:
+                turn_left_milisecond(800)
+            else:
+                turn_right_milisecond(800)
+
 
     def dwa_planner(self, world_target):
         MAX_SPEED = MAX_VELOCITY * self.wheel_radius
@@ -169,6 +214,13 @@ class MyRobot:
         return False
     
     def explore(self):
+        count = 0
+        while self.step(TIME_STEP) != -1 and count < 100000:
+            self.adapt_direction()
+            count += 1 
+
+            self.set_robot_velocity(8, 8)
+
         start_point = [200, 250]
         end_point = [600, 500]
         return self.grid_map, start_point, end_point 
@@ -239,3 +291,60 @@ class MyRobot:
                 if self.follow_local_target(target):
                     break
         self.stop_motor()
+
+    def get_pointcloud_2d(self):
+        points = self.lidar.getPointCloud()
+        points = np.array([[point.x, point.y] for point in points])
+        points = points[~np.isinf(points).any(axis=1)]
+        return points
+    
+    def transform_points_to_world(self, points_local):
+        """
+        Transform a batch of 2D points from robot-local frame to world frame using NumPy.
+
+        Parameters:
+            points_local: np.ndarray of shape (N, 2) — local [x, y] points
+
+        Returns:
+            points_world: np.ndarray of shape (N, 2) — transformed points in world coordinates
+        """
+        # Get robot pose
+        x_robot, y_robot = self.get_position()
+        theta = self.get_heading('rad')  # yaw
+
+        # Rotation matrix R(theta)
+        R = np.array([
+            [np.cos(theta), -np.sin(theta)],
+            [np.sin(theta),  np.cos(theta)]
+        ])
+
+        # Apply rotation and translation
+        points_rotated = points_local @ R.T  # shape (N, 2)
+        points_world = points_rotated + np.array([x_robot, y_robot])  # broadcast translation
+
+        return points_world
+
+    def get_pointcloud_world_coordinates(self):
+        points_local = self.get_pointcloud_2d()
+        points_world = self.transform_points_to_world(points_local)
+        return points_world
+    
+    def convert_to_map_coordinate_matrix(self, points_world):
+        # Compute transformation from world to map:
+        # - Scaling (1 / RESOLUTION)
+        # - Translation to shift origin to center of map
+
+        # Rotation matrix (identity — no rotation needed in this case)
+        R_map = np.array([
+            [1 / RESOLUTION, 0],
+            [0, -1 / RESOLUTION]  # Flip y-axis
+        ])
+
+        # Translation: move origin to center of map
+        t_map = np.array([MAP_SIZE // 2, MAP_SIZE // 2])
+
+        # Apply matrix transformation
+        points_scaled = points_world @ R_map.T
+        points_map = points_scaled + t_map
+
+        return points_map.astype(np.int32)
