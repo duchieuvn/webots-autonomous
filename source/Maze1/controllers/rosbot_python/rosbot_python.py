@@ -30,34 +30,9 @@ def draw_bresenham_line(grid_map, start, end):
 def main():
     robot = MyRobot()
     vis = Visualizer()
-    # grid_map, start_point, end_point = robot.explore()
+    grid_map, start_point, end_point = robot.explore()
     # path = robot.find_path(start_point, end_point)
     # robot.path_following_pipeline(path)
-    
-    running = True
-    count = 0
-    while robot.step(robot.time_step) != -1 and running:
-        for event in pygame.event.get():  # Xử lý tất cả sự kiện
-            if event.type == pygame.QUIT:  # Nếu người dùng đóng cửa sổ
-                running = False
-        vis.clear_screen()
-
-        robot.adapt_direction()
-        robot.set_robot_velocity(8,8)
-        points = robot.get_pointcloud_world_coordinates()
-        map_points = robot.convert_to_map_coordinate_matrix(points)
-        
-        if count % 20 == 0 and not robot.is_turning():
-            for map_point in map_points:
-                robot.draw_bresenham_line(map_point)
-            #    vis.draw_line(cur_map_pos, map_point)
-
-        vis.update_screen_with_map(robot.grid_map)
-        vis.draw_robot(robot)
-        vis.display_screen()
-
-        count += 1
-
 
 main()  
 

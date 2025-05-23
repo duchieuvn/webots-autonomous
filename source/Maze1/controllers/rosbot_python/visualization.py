@@ -28,9 +28,8 @@ class Visualizer():
         screen_y = int(map_y * self.window_size[1] / MAP_SIZE)
         return screen_x, screen_y
 
-    def draw_robot(self, robot):
-        current_pos = robot.get_map_position()
-        screen_x, screen_y = self.convert_map_to_screen(current_pos[0], current_pos[1])
+    def draw_robot(self, map_position):
+        screen_x, screen_y = self.convert_map_to_screen(map_position[0], map_position[1])
         pygame.draw.circle(self.screen, (0, 0, 255), (screen_x, screen_y), 5)  # Bán kính = 5 pixel
 
 

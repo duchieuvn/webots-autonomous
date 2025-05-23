@@ -2,6 +2,8 @@ import numpy as np
 from setup import setup_robot
 import cv2
 import random
+from visualization import Visualizer
+import pygame
 
 TIME_STEP = 32
 MAX_VELOCITY = 26
@@ -219,12 +221,31 @@ class MyRobot:
         return False
     
     def explore(self):
+        vis = Visualizer()
+        
+        running = True
         count = 0
-        while self.step(TIME_STEP) != -1 and count < 100000:
-            self.adapt_direction()
-            count += 1 
+        while self.step(self.time_step) != -1 and running:
+            for event in pygame.event.get(): 
+                if event.type == pygame.QUIT:
+                    running = False
+            vis.clear_screen()
 
-            self.set_robot_velocity(8, 8)
+            self.adapt_direction()
+            self.set_robot_velocity(8,8)
+            points = self.get_pointcloud_world_coordinates()
+            map_points = self.convert_to_map_coordinate_matrix(points)
+            
+            if count % 20 == 0 and not self.is_turning():
+                for map_point in map_points:
+                    self.draw_bresenham_line(map_point)
+                #    vis.draw_line(cur_map_pos, map_point)
+
+            vis.update_screen_with_map(self.grid_map)
+            vis.draw_robot(self.get_map_position())
+            vis.display_screen()
+
+            count += 1
 
         start_point = [200, 250]
         end_point = [600, 500]
