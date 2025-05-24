@@ -17,6 +17,7 @@ FREESPACE_VALUE = 0
 UNKNOWN_VALUE = 255
 
 grid_map = np.full((MAP_SIZE, MAP_SIZE), UNKNOWN_VALUE, dtype=np.uint8)
+obstacle_score_map = np.full((MAP_SIZE, MAP_SIZE), 2, dtype=np.float32)
 
 def get_angle_diff(a, b):
         diff = a - b
@@ -31,6 +32,7 @@ class MyRobot:
         self.robot, self.motors, self.wheel_sensors, self.imu, self.camera_rgb, self.camera_depth, self.lidar, self.distance_sensors = setup_robot()
         self.time_step = TIME_STEP
         self.grid_map = grid_map
+        self.obstacle_score_map = obstacle_score_map
         self.wheel_radius = WHEEL_RADIUS
         self.axle_length = AXLE_LENGTH
 
@@ -237,9 +239,12 @@ class MyRobot:
             map_points = self.convert_to_map_coordinate_matrix(points)
             
             if count % 20 == 0 and not self.is_turning():
-                for map_point in map_points:
-                    self.draw_bresenham_line(map_point)
-                #    vis.draw_line(cur_map_pos, map_point)
+                # for map_point in map_points:
+                    # self.draw_bresenham_line(map_point)
+                    self.bresenham_to_obstacle_score(map_points)
+                    self.update_grid_map()
+                    # print(self.obstacle_score_map[100:200, 500:700])
+                    # vis.draw_line(cur_map_pos, map_point)
 
             vis.update_screen_with_map(self.grid_map)
             vis.draw_robot(self.get_map_position())
@@ -394,3 +399,58 @@ class MyRobot:
             if err2 < dx:
                 err += dx
                 y1 += sy
+                
+    def bresenham_line(self, start, end):
+        """
+        Bresenham's line algorithm to generate points between two coordinates.
+        Returns a list of (x, y) tuples.
+        """
+        x1, y1 = start
+        x2, y2 = end
+        points = []
+        dx = abs(x2 - x1)
+        dy = abs(y2 - y1)
+        sx = 1 if x1 < x2 else -1
+        sy = 1 if y1 < y2 else -1
+        err = dx - dy
+
+        while True:
+            points.append((x1, y1))
+            if x1 == x2 and y1 == y2:
+                break
+            err2 = err * 2
+            if err2 > -dy:
+                err -= dy
+                x1 += sx
+            if err2 < dx:
+                err += dx
+                y1 += sy
+
+        return points
+    
+    def bresenham_to_obstacle_score(self, lidar_map_points):
+        """
+        Update log-odds map using Bresenham for each LIDAR point in map coordinates.
+        """
+        map_position = self.get_map_position()
+
+        for map_target in lidar_map_points:
+            points = self.bresenham_line(map_position, map_target)
+
+            # Free points: all except the last
+            for x, y in points[:-1]:
+                if 0 <= x < MAP_SIZE and 0 <= y < MAP_SIZE:
+                    self.obstacle_score_map[y, x] -= 0.4
+                    # self.grid_map[y, x] = FREESPACE_VALUE 
+
+            # Occupied cell: last one
+            x, y = points[-1]
+            if 0 <= x < MAP_SIZE and 0 <= y < MAP_SIZE:
+                self.obstacle_score_map[y, x] += 0.85
+
+    def update_grid_map(self):
+        #  clip the score map from (-5, 5) to avoid overflow when applying exponential function np.exp
+        limited_score_map = np.clip(self.obstacle_score_map, -5, 5) 
+        P = 1 / (1 + np.exp(-limited_score_map))
+        self.grid_map[P > 0.7] = OBSTACLE_VALUE
+        self.grid_map[P < 0.5] = FREESPACE_VALUE

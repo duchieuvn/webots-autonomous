@@ -112,7 +112,7 @@ class Visualizer():
         pygame.display.flip()
     
     def update_screen_with_map(self, grid_map):
-        visual_map = np.stack([grid_map] * 3, axis=-1)
+        visual_map = np.stack([grid_map*100] * 3, axis=-1)
         visual_map_rgb = np.transpose(visual_map, (1, 0, 2))
         map_surface = self.create_map_surface(visual_map_rgb)
         self.screen.blit(map_surface, (0, 0))
