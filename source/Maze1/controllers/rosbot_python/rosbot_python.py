@@ -31,6 +31,8 @@ def main():
     robot = MyRobot()
     vis = Visualizer()
     grid_map, start_point, end_point = robot.explore()
+    affected_map = robot.inflate_obstacles(grid_map)
+    
     # path = robot.find_path(start_point, end_point)
     # robot.path_following_pipeline(path)
     

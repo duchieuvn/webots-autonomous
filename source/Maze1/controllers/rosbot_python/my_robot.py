@@ -9,14 +9,15 @@ TIME_STEP = 32
 MAX_VELOCITY = 26
 WHEEL_RADIUS = 0.043
 AXLE_LENGTH = 0.18
-MAP_SIZE = 1000
+MAP_SIZE = 1000 # 10m x 10.0m grid map
+# 1000 pixels = 10m, so each pixel is 0.01m = 1cm
 RESOLUTION = 0.01
 
 OBSTACLE_VALUE = 1
 FREESPACE_VALUE = 0
 UNKNOWN_VALUE = 255
 
-grid_map = np.full((MAP_SIZE, MAP_SIZE), UNKNOWN_VALUE, dtype=np.uint8)
+grid_map = np.full((MAP_SIZE, MAP_SIZE), FREESPACE_VALUE, dtype=np.uint8)
 obstacle_score_map = np.full((MAP_SIZE, MAP_SIZE), 2, dtype=np.float32)
 
 def get_angle_diff(a, b):
@@ -227,7 +228,7 @@ class MyRobot:
         
         running = True
         count = 0
-        while self.step(self.time_step) != -1 and running:
+        while self.step(self.time_step) != -1 and count < 900:
             for event in pygame.event.get(): 
                 if event.type == pygame.QUIT:
                     running = False
@@ -454,3 +455,25 @@ class MyRobot:
         P = 1 / (1 + np.exp(-limited_score_map))
         self.grid_map[P > 0.7] = OBSTACLE_VALUE
         self.grid_map[P < 0.5] = FREESPACE_VALUE
+
+    def inflate_obstacles(self, grid_map, inflation_pixels=10):
+        # Create a circular kernel based on the desired inflation radius
+        kernel_size = int(2 * inflation_pixels + 1)
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
+        
+        # Convert the grid map to uint8 format (0 and 255) for OpenCV processing
+        grid_uint8 = (grid_map * 255).astype(np.uint8)
+        cv2.imwrite('../../grid_map.png', grid_uint8)
+        print(f"Unique values before dilation: {np.unique(grid_uint8)}")
+        # Apply morphological dilation to expand obstacle areas
+        inflated = cv2.dilate(grid_uint8, kernel, iterations=1)
+        v, c = np.unique(inflated, return_counts=True)
+        print(f"Unique values after dilation: {v}, Counts: {c}")
+
+        # color_map = cv2.cvtColor(inflated, cv2.COLOR_GRAY2RGB)  # Convert grayscale to RGB
+        cv2.imwrite('../../inflated_map_color.png', inflated)  # Save the colored image as PNG
+
+        # Convert the result back to binary format (0 and 1)
+        inflated_map = (inflated > 0).astype(np.uint8)
+        
+        return inflated_map
