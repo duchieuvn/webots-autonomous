@@ -228,7 +228,7 @@ class MyRobot:
         
         running = True
         count = 0
-        while self.step(self.time_step) != -1 and count < 900:
+        while self.step(self.time_step) != -1 and count < 1500:
             for event in pygame.event.get(): 
                 if event.type == pygame.QUIT:
                     running = False
