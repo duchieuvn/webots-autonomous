@@ -4,6 +4,7 @@ import cv2
 import random
 from visualization import Visualizer
 import pygame
+from sklearn.cluster import DBSCAN
 
 TIME_STEP = 32
 MAX_VELOCITY = 26
@@ -182,7 +183,8 @@ class MyRobot:
                     ct += w * dt
 
                     predicted_map_x, predicted_map_y = self.convert_to_map_coordinates(cx, cy)
-                    if self.there_is_obstacle([predicted_map_x, predicted_map_y]):
+                    # if self.there_is_obstacle([predicted_map_x, predicted_map_y]):
+                    if not self.is_safe_cell((predicted_map_x, predicted_map_y)):
                         good_path = False
                         break
                     
@@ -211,20 +213,68 @@ class MyRobot:
         return best_v, best_w
 
     def follow_local_target(self, map_target):
-        if self.get_map_distance(map_target) < 2:
+        current_map_pos = self.get_map_position()
+
+        # Consider target reached if within 6 pixels (~6 cm)
+        if np.linalg.norm(np.array(current_map_pos) - np.array(map_target)) < 12:
             self.stop_motor()
             return True
 
-        world_target = self.convert_to_world_coordinates(map_target[0], map_target[1])
+        # Frontier got blocked (e.g. due to poor lidar or mapping noise)
+        if self.grid_map[map_target[1], map_target[0]] == OBSTACLE_VALUE:
+            return True
+
+        # If too close to wall (unsafe to proceed), skip it
+        if not self.is_safe_cell(map_target, inflation_pixels=6, fallback_lidar=True):
+            # print(f"Skipping frontier {map_target}, not safe.")
+            return True
+
+        # Otherwise, compute motion toward target
+        world_target = self.convert_to_world_coordinates(*map_target)
         v, w = self.dwa_planner(world_target)
         left_speed, right_speed = self.velocity_to_wheel_speeds(v, w)
         self.set_robot_velocity(left_speed, right_speed)
         return False
 
+
+
     def there_is_obstacle(self, map_target):
         if self.grid_map[map_target[1], map_target[0]] == OBSTACLE_VALUE:
             return True
         return False
+    
+    def is_safe_cell(self, map_target, inflation_pixels=6, fallback_lidar=True):
+        """
+        Checks whether a map cell is safe for navigation, using an inflated obstacle map.
+        This prevents the robot from moving too close to walls or corners.
+
+        Args:
+            map_target: (x, y) tuple in map coordinates
+            inflation_pixels: how much margin around obstacles to consider unsafe
+
+        Returns:
+            True if the cell is free and outside inflated danger zone, False otherwise
+        """
+        x, y = map_target
+        if not (0 <= x < MAP_SIZE and 0 <= y < MAP_SIZE):
+            return False
+
+        # Check inflated obstacle map
+        if not hasattr(self, '_inflated_map_cache') or self._inflated_map_cache_inflation != inflation_pixels:
+            self._inflated_map_cache = self.inflate_obstacles(self.grid_map, inflation_pixels)
+            self._inflated_map_cache_inflation = inflation_pixels
+
+        is_safe = self._inflated_map_cache[y, x] == 0
+        if is_safe:
+            return True
+
+        # If fallback allowed, check with LiDAR clearance radius
+        if fallback_lidar:
+            return self.is_frontier_clear_by_lidar((x, y), min_clearance_cm=10)
+
+        return False
+
+
     
     def explore(self):
         vis = Visualizer()
@@ -233,6 +283,9 @@ class MyRobot:
         count = 0
         frontiers = []
         last_frontier_update = -100
+        self.current_frontier_target = None
+        frontier_timer = 0
+
         while self.step(self.time_step) != -1 and count < 1500:
             for event in pygame.event.get(): 
                 if event.type == pygame.QUIT:
@@ -240,32 +293,28 @@ class MyRobot:
             vis.clear_screen()
 
             distances = self.get_distances()
-            if min(distances[0], distances[2]) < 0.3:
+            if self.is_front_blocked_lidar():
                 self.adapt_direction()
             else:
                 self.set_robot_velocity(8, 8)
+            # if min(distances[0], distances[2]) < 0.3:
+            #     self.adapt_direction()
+            # else:
+            #     self.set_robot_velocity(8, 8)
             
             if count % 30 == 0:
                 unique = np.unique(self.grid_map, return_counts=True)
-            print(f"Grid values: {dict(zip(unique[0], unique[1]))}")
+                # print(f"Grid values: {dict(zip(unique[0], unique[1]))}")
 
             if count % 30 == 0:
                 map_x, map_y = self.get_map_position()
                 patch = self.grid_map[map_y-5:map_y+6, map_x-5:map_x+6]
-                print("Region around robot:\n", patch)
+                # print("Region around robot:\n", patch)
 
             points = self.get_pointcloud_world_coordinates()
             map_points = self.convert_to_map_coordinate_matrix(points)
-
-            if count - last_frontier_update > 10:
-                frontiers = self.detect_frontiers()
-                robot_pos = self.get_map_position()
-                frontiers.sort(key=lambda p: np.linalg.norm(np.array(p) - np.array(robot_pos)))
-                frontiers = frontiers[:200]
-                last_frontier_update = count
-                print(f"Number of frontiers: {len(frontiers)}")
-
-            if count % 30 == 0 and not self.is_turning():
+            
+            if count % 20 == 0 and not self.is_turning():
                 # for map_point in map_points:
                     # self.draw_bresenham_line(map_point)
                     self.bresenham_to_obstacle_score(map_points)
@@ -273,9 +322,61 @@ class MyRobot:
                     # print(self.obstacle_score_map[100:200, 500:700])
                     # vis.draw_line(cur_map_pos, map_point)
 
+            if self.current_frontier_target is None and count - last_frontier_update > 10:
+                frontiers = self.detect_frontiers()
+
+                # Clamp to valid map bounds
+                frontiers = [
+                    f for f in frontiers
+                    if 0 <= f[0] < MAP_SIZE and 0 <= f[1] < MAP_SIZE
+                ]
+
+                robot_pos = self.get_map_position()
+
+                # Filter: free space only & not too close
+                frontiers = [
+                    f for f in frontiers
+                    if np.linalg.norm(np.array(f) - robot_pos) > 50 and self.grid_map[f[1], f[0]] == FREESPACE_VALUE
+                ]
+
+                # Sort by distance and limit to first 200
+                frontiers.sort(key=lambda p: np.linalg.norm(np.array(p) - robot_pos))
+                frontiers = frontiers[:200]
+                # Filter valid frontiers
+                frontiers = [f for f in frontiers if self.grid_map[f[1], f[0]] == FREESPACE_VALUE and self.is_frontier_clear_by_lidar(f, min_clearance_cm=5)]
+                
+                if frontiers:
+                    scored = sorted(frontiers, key=lambda f: self.score_frontier(f, robot_pos))
+                    self.current_frontier_target = scored[0]
+                    last_frontier_update = count
+                else:
+                    self.current_frontier_target = None
+                print(f"Number of frontiers: {len(frontiers)}")
+            print(f"Target frontier: {self.current_frontier_target}, Robot: {self.get_map_position()}")
+            
+            # Follow the current centroid
+            if self.current_frontier_target is not None and not self.is_turning():
+                x, y = self.current_frontier_target
+                if 0 <= x < MAP_SIZE and 0 <= y < MAP_SIZE:
+                    done = self.follow_local_target(self.current_frontier_target)
+                    frontier_timer += 1
+                    # Frontier completion or timeout or newly blocked
+                    if done or frontier_timer > 150 or self.grid_map[y, x] == OBSTACLE_VALUE:
+                        self.current_frontier_target = None
+                        frontier_timer = 0
+                else:
+                    self.current_frontier_target = None
+                    frontier_timer = 0    
+
+            
+
             vis.update_screen_with_map(self.grid_map)
             vis.draw_robot(self.get_map_position())
-            vis.draw_frontiers(frontiers)
+            vis.draw_frontiers(frontiers[:50])
+            # filtered_frontiers = [f for f in frontiers if self.is_frontier_clear_by_lidar(f)]
+            # vis.draw_filtered_frontiers(filtered_frontiers)
+            if self.current_frontier_target is not None:
+                vis.draw_centroids([self.current_frontier_target])
             vis.display_screen()
 
             count += 1
@@ -486,7 +587,7 @@ class MyRobot:
         for map_target in lidar_map_points:
             points = self.bresenham_line(map_position, map_target)
 
-            max_range = 50  # ~50 pixels = 0.5m
+            max_range = 100  # ~100 pixels = 1m
             count = 0
 
             for x, y in points[:-1]:
@@ -518,11 +619,11 @@ class MyRobot:
         # Convert the grid map to uint8 format (0 and 255) for OpenCV processing
         grid_uint8 = (grid_map * 255).astype(np.uint8)
         cv2.imwrite('../../grid_map.png', grid_uint8)
-        print(f"Unique values before dilation: {np.unique(grid_uint8)}")
+        # print(f"Unique values before dilation: {np.unique(grid_uint8)}")
         # Apply morphological dilation to expand obstacle areas
         inflated = cv2.dilate(grid_uint8, kernel, iterations=1)
         v, c = np.unique(inflated, return_counts=True)
-        print(f"Unique values after dilation: {v}, Counts: {c}")
+        # print(f"Unique values after dilation: {v}, Counts: {c}")
 
         # color_map = cv2.cvtColor(inflated, cv2.COLOR_GRAY2RGB)  # Convert grayscale to RGB
         cv2.imwrite('../../inflated_map_color.png', inflated)  # Save the colored image as PNG
@@ -543,3 +644,83 @@ class MyRobot:
                         frontiers.append((x, y))
         return frontiers
 
+    def cluster_frontiers(self, frontiers, eps=5, min_samples=3):
+        if not frontiers:
+            return []
+
+        frontiers_np = np.array(frontiers)
+        clustering = DBSCAN(eps=eps, min_samples=min_samples).fit(frontiers_np)
+        labels = clustering.labels_
+
+        # Group frontier points by cluster label
+        clusters = {}
+        for point, label in zip(frontiers, labels):
+            if label == -1:
+                continue  # skip noise
+            if label not in clusters:
+                clusters[label] = []
+            clusters[label].append(point)
+
+        # Compute centroids of each cluster
+        centroids = []
+        for cluster_points in clusters.values():
+            xs, ys = zip(*cluster_points)
+            centroid = (int(np.mean(xs)), int(np.mean(ys)))
+            centroids.append(centroid)
+
+        return centroids
+    
+    def is_valid_frontier(self, f, min_clearance=3):
+        x, y = f
+        if not (0 <= x < MAP_SIZE and 0 <= y < MAP_SIZE):
+            return False
+
+        # Check a slightly larger patch for safety margin (adjustable)
+        patch = self.grid_map[max(0, y - min_clearance):y + min_clearance + 1,
+                            max(0, x - min_clearance):x + min_clearance + 1]
+        
+        # Ensure at least some unknown space around but not fully surrounded by obstacles
+        num_obs = np.count_nonzero(patch == OBSTACLE_VALUE)
+        num_total = patch.size
+        if num_obs > 0.3 * num_total:
+            return False
+
+        # Optionally keep front-facing only (can comment this out for early testing)
+        robot_x, robot_y = self.get_map_position()
+        heading = self.get_heading('rad')
+        dx = x - robot_x
+        dy = robot_y - y  # y axis flipped
+        angle_to_point = np.arctan2(dy, dx)
+        angle_diff = get_angle_diff(angle_to_point, heading)
+
+        return abs(angle_diff) < np.pi * 0.75  # Allow wider cone
+    
+    def is_frontier_clear_by_lidar(self, map_point, min_clearance_cm=20):
+        """
+        Check if a frontier is clear of obstacles within a circular radius using LiDAR data.
+        """
+        world_x, world_y = self.convert_to_world_coordinates(*map_point)
+        robot_x, robot_y = self.get_position()
+
+        # Get all LiDAR points in world frame
+        points_world = self.get_pointcloud_world_coordinates()
+
+        for px, py in points_world:
+            dist = np.hypot(px - world_x, py - world_y)
+            if dist < min_clearance_cm / 100.0:  # convert cm to meters
+                return False
+        return True
+    
+    def is_front_blocked_lidar(self, min_clearance=0.25):
+        points = self.get_pointcloud_2d()
+        forward_points = points[(points[:, 0] > 0) & (np.abs(points[:, 1]) < 0.2)]
+        return np.any(np.hypot(forward_points[:, 0], forward_points[:, 1]) < min_clearance)
+    
+    def score_frontier(self, f, robot_pos):
+        dist = np.linalg.norm(np.array(f) - robot_pos)
+        heading = self.get_heading('rad')
+        dx, dy = f[0] - robot_pos[0], robot_pos[1] - f[1]
+        angle_to = np.arctan2(dy, dx)
+        angle_diff = abs(get_angle_diff(angle_to, heading))
+        angle_score = np.cos(angle_diff)
+        return dist - 30 * angle_score  # Tune weights

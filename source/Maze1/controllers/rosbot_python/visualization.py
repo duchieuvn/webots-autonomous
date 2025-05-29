@@ -109,6 +109,7 @@ class Visualizer():
         self.draw_path(path)
         self.draw_robot_to_target(robot, target)
         self.draw_robot_orientation(robot)
+        self.draw_target_frontier(target)
         pygame.display.flip()
     
     def update_screen_with_map(self, grid_map):
@@ -121,3 +122,18 @@ class Visualizer():
         for x, y in frontiers:
             screen_x, screen_y = self.convert_map_to_screen(x, y)
             pygame.draw.circle(self.screen, (255, 0, 255), (screen_x, screen_y), 2)
+
+    def draw_centroids(self, centroids, color=(0, 255, 0)):
+        for cx, cy in centroids:
+            screen_x, screen_y = self.convert_map_to_screen(cx, cy)
+            pygame.draw.circle(self.screen, color, (screen_x, screen_y), 6)
+    
+    def draw_target_frontier(self, target_frontier):
+        if target_frontier is not None:
+            screen_x, screen_y = self.convert_map_to_screen(target_frontier[0], target_frontier[1])
+            pygame.draw.circle(self.screen, (0, 255, 0), (screen_x, screen_y), 6)
+    
+    def draw_filtered_frontiers(self, frontiers, color=(255, 255, 0)):
+        for x, y in frontiers:
+            sx, sy = self.convert_map_to_screen(x, y)
+            pygame.draw.circle(self.screen, color, (sx, sy), 2)
