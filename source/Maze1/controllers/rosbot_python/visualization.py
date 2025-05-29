@@ -116,3 +116,8 @@ class Visualizer():
         visual_map_rgb = np.transpose(visual_map, (1, 0, 2))
         map_surface = self.create_map_surface(visual_map_rgb)
         self.screen.blit(map_surface, (0, 0))
+    
+    def draw_frontiers(self, frontiers):
+        for x, y in frontiers:
+            screen_x, screen_y = self.convert_map_to_screen(x, y)
+            pygame.draw.circle(self.screen, (255, 0, 255), (screen_x, screen_y), 2)

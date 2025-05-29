@@ -17,8 +17,10 @@ OBSTACLE_VALUE = 1
 FREESPACE_VALUE = 0
 UNKNOWN_VALUE = 255
 
-grid_map = np.full((MAP_SIZE, MAP_SIZE), FREESPACE_VALUE, dtype=np.uint8)
-obstacle_score_map = np.full((MAP_SIZE, MAP_SIZE), 2, dtype=np.float32)
+grid_map = np.full((MAP_SIZE, MAP_SIZE), UNKNOWN_VALUE, dtype=np.uint8)
+# grid_map = np.full((MAP_SIZE, MAP_SIZE), FREESPACE_VALUE, dtype=np.uint8)
+obstacle_score_map = np.full((MAP_SIZE, MAP_SIZE), 0.0, dtype=np.float32)
+# obstacle_score_map = np.full((MAP_SIZE, MAP_SIZE), 2, dtype=np.float32)
 
 def get_angle_diff(a, b):
         diff = a - b
@@ -36,6 +38,7 @@ class MyRobot:
         self.obstacle_score_map = obstacle_score_map
         self.wheel_radius = WHEEL_RADIUS
         self.axle_length = AXLE_LENGTH
+        # self.frontiers = []
 
     def step(self, time_step=TIME_STEP):
         return self.robot.step(time_step)
@@ -228,18 +231,41 @@ class MyRobot:
         
         running = True
         count = 0
+        frontiers = []
+        last_frontier_update = -100
         while self.step(self.time_step) != -1 and count < 1500:
             for event in pygame.event.get(): 
                 if event.type == pygame.QUIT:
                     running = False
             vis.clear_screen()
 
-            self.adapt_direction()
-            self.set_robot_velocity(8,8)
+            distances = self.get_distances()
+            if min(distances[0], distances[2]) < 0.3:
+                self.adapt_direction()
+            else:
+                self.set_robot_velocity(8, 8)
+            
+            if count % 30 == 0:
+                unique = np.unique(self.grid_map, return_counts=True)
+            print(f"Grid values: {dict(zip(unique[0], unique[1]))}")
+
+            if count % 30 == 0:
+                map_x, map_y = self.get_map_position()
+                patch = self.grid_map[map_y-5:map_y+6, map_x-5:map_x+6]
+                print("Region around robot:\n", patch)
+
             points = self.get_pointcloud_world_coordinates()
             map_points = self.convert_to_map_coordinate_matrix(points)
-            
-            if count % 20 == 0 and not self.is_turning():
+
+            if count - last_frontier_update > 10:
+                frontiers = self.detect_frontiers()
+                robot_pos = self.get_map_position()
+                frontiers.sort(key=lambda p: np.linalg.norm(np.array(p) - np.array(robot_pos)))
+                frontiers = frontiers[:200]
+                last_frontier_update = count
+                print(f"Number of frontiers: {len(frontiers)}")
+
+            if count % 30 == 0 and not self.is_turning():
                 # for map_point in map_points:
                     # self.draw_bresenham_line(map_point)
                     self.bresenham_to_obstacle_score(map_points)
@@ -249,6 +275,7 @@ class MyRobot:
 
             vis.update_screen_with_map(self.grid_map)
             vis.draw_robot(self.get_map_position())
+            vis.draw_frontiers(frontiers)
             vis.display_screen()
 
             count += 1
@@ -429,32 +456,59 @@ class MyRobot:
 
         return points
     
+    # def bresenham_to_obstacle_score(self, lidar_map_points):
+    #     """
+    #     Update log-odds map using Bresenham for each LIDAR point in map coordinates.
+    #     """
+    #     map_position = self.get_map_position()
+
+    #     for map_target in lidar_map_points:
+    #         points = self.bresenham_line(map_position, map_target)
+
+    #         # Free points: all except the last
+    #         for x, y in points[:-1]:
+    #             if 0 <= x < MAP_SIZE and 0 <= y < MAP_SIZE:
+    #                 self.obstacle_score_map[y, x] -= 0.4
+    #                 # self.grid_map[y, x] = FREESPACE_VALUE 
+
+    #         # Occupied cell: last one
+    #         x, y = points[-1]
+    #         if 0 <= x < MAP_SIZE and 0 <= y < MAP_SIZE:
+    #             self.obstacle_score_map[y, x] += 0.85
+    
     def bresenham_to_obstacle_score(self, lidar_map_points):
         """
         Update log-odds map using Bresenham for each LIDAR point in map coordinates.
+        Only update unknown (255) areas to preserve frontier boundaries.
         """
         map_position = self.get_map_position()
 
         for map_target in lidar_map_points:
             points = self.bresenham_line(map_position, map_target)
 
-            # Free points: all except the last
-            for x, y in points[:-1]:
-                if 0 <= x < MAP_SIZE and 0 <= y < MAP_SIZE:
-                    self.obstacle_score_map[y, x] -= 0.4
-                    # self.grid_map[y, x] = FREESPACE_VALUE 
+            max_range = 50  # ~50 pixels = 0.5m
+            count = 0
 
-            # Occupied cell: last one
+            for x, y in points[:-1]:
+                if count > max_range:
+                    break  # stop updating too deep into unknowns
+                if 0 <= x < MAP_SIZE and 0 <= y < MAP_SIZE:
+                    if self.grid_map[y, x] == UNKNOWN_VALUE:
+                        self.obstacle_score_map[y, x] -= 0.4
+                count += 1
+
+            # Final point = obstacle
             x, y = points[-1]
             if 0 <= x < MAP_SIZE and 0 <= y < MAP_SIZE:
-                self.obstacle_score_map[y, x] += 0.85
+                if self.grid_map[y, x] == UNKNOWN_VALUE:
+                    self.obstacle_score_map[y, x] += 0.85
 
     def update_grid_map(self):
         #  clip the score map from (-5, 5) to avoid overflow when applying exponential function np.exp
         limited_score_map = np.clip(self.obstacle_score_map, -5, 5) 
         P = 1 / (1 + np.exp(-limited_score_map))
-        self.grid_map[P > 0.7] = OBSTACLE_VALUE
-        self.grid_map[P < 0.5] = FREESPACE_VALUE
+        self.grid_map[P > 0.65] = OBSTACLE_VALUE
+        self.grid_map[P < 0.35] = FREESPACE_VALUE
 
     def inflate_obstacles(self, grid_map, inflation_pixels=10):
         # Create a circular kernel based on the desired inflation radius
@@ -477,3 +531,15 @@ class MyRobot:
         inflated_map = (inflated > 0).astype(np.uint8)
         
         return inflated_map
+    
+
+    def detect_frontiers(self):
+        frontiers = []
+        for y in range(1, MAP_SIZE - 1):
+            for x in range(1, MAP_SIZE - 1):
+                if self.grid_map[y, x] == FREESPACE_VALUE:
+                    neighbors = self.grid_map[y-1:y+2, x-1:x+2]
+                    if UNKNOWN_VALUE in neighbors:
+                        frontiers.append((x, y))
+        return frontiers
+
