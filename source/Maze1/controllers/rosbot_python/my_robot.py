@@ -4,6 +4,7 @@ import cv2
 import random
 from visualization import Visualizer
 import pygame
+import time
 from sklearn.cluster import DBSCAN
 
 TIME_STEP = 32
@@ -266,7 +267,7 @@ class MyRobot:
 
         is_safe = self._inflated_map_cache[y, x] == 0
         if is_safe:
-            return True
+            return True  
 
         # If fallback allowed, check with LiDAR clearance radius
         if fallback_lidar:
@@ -275,6 +276,121 @@ class MyRobot:
         return False
 
 
+    
+    # def explore(self):
+    #     vis = Visualizer()
+        
+    #     running = True
+    #     count = 0
+    #     frontiers = []
+    #     last_frontier_update = -100
+    #     self.current_frontier_target = None
+    #     frontier_timer = 0
+    #     frontier_start_time = None
+    #     FRONTIER_TIMEOUT = 5.0  # seconds
+
+    #     while self.step(self.time_step) != -1 and count < 1500:
+    #         for event in pygame.event.get(): 
+    #             if event.type == pygame.QUIT:
+    #                 running = False
+    #         vis.clear_screen()
+
+    #         distances = self.get_distances()
+    #         if self.is_front_blocked_lidar():
+    #             self.adapt_direction()
+    #         else:
+    #             self.set_robot_velocity(8, 8)
+    #         # if min(distances[0], distances[2]) < 0.3:
+    #         #     self.adapt_direction()
+    #         # else:
+    #         #     self.set_robot_velocity(8, 8)
+            
+    #         if count % 30 == 0:
+    #             unique = np.unique(self.grid_map, return_counts=True)
+    #             # print(f"Grid values: {dict(zip(unique[0], unique[1]))}")
+
+    #         if count % 30 == 0:
+    #             map_x, map_y = self.get_map_position()
+    #             patch = self.grid_map[map_y-5:map_y+6, map_x-5:map_x+6]
+    #             # print("Region around robot:\n", patch)
+    #         if self.current_frontier_target is None:
+    #             points = self.get_pointcloud_world_coordinates()
+    #             map_points = self.convert_to_map_coordinate_matrix(points)
+                
+    #             if count % 20 == 0 and not self.is_turning():
+    #                 # for map_point in map_points:
+    #                     # self.draw_bresenham_line(map_point)
+    #                     self.bresenham_to_obstacle_score(map_points)
+    #                     self.update_grid_map()
+    #                     # print(self.obstacle_score_map[100:200, 500:700])
+    #                     # vis.draw_line(cur_map_pos, map_point)
+            
+    #             if self.current_frontier_target is None and count - last_frontier_update > 30:
+    #                 frontiers = self.detect_frontiers()
+
+    #                 # Clamp to valid map bounds
+    #                 frontiers = [
+    #                     f for f in frontiers
+    #                     if 0 <= f[0] < MAP_SIZE and 0 <= f[1] < MAP_SIZE
+    #                 ]
+
+    #                 robot_pos = self.get_map_position()
+
+    #                 # Filter: free space only & not too close
+    #                 frontiers = [
+    #                     f for f in frontiers
+    #                     if np.linalg.norm(np.array(f) - robot_pos) > 50 and self.grid_map[f[1], f[0]] == FREESPACE_VALUE
+    #                 ]
+
+    #                 # Sort by distance and limit to first 200
+    #                 frontiers.sort(key=lambda p: np.linalg.norm(np.array(p) - robot_pos))
+    #                 frontiers = frontiers[:200]
+    #                 # Filter valid frontiers
+    #                 frontiers = [f for f in frontiers if self.grid_map[f[1], f[0]] == FREESPACE_VALUE and self.is_frontier_clear_by_lidar(f, min_clearance_cm=5)]
+                    
+    #                 if frontiers:
+    #                     scored = sorted(frontiers, key=lambda f: self.score_frontier(f, robot_pos))
+    #                     self.current_frontier_target = scored[0]
+    #                     frontier_start_time = time.time()
+    #                     last_frontier_update = count
+    #                 else:
+    #                     self.current_frontier_target = None
+    #             #     print(f"Number of frontiers: {len(frontiers)}")
+    #             # print(f"Target frontier: {self.current_frontier_target}, Robot: {self.get_map_position()}")
+            
+    #         # Follow the current frontier target
+    #         if self.current_frontier_target is not None and not self.is_turning():
+    #             x, y = self.current_frontier_target
+    #             if 0 <= x < MAP_SIZE and 0 <= y < MAP_SIZE:
+    #                 done = self.follow_local_target(self.current_frontier_target)
+    #                 frontier_timer += 1
+    #                 # Frontier completion or timeout or newly blocked
+    #                 if (done 
+    #                     or frontier_timer > 150 
+    #                     or self.grid_map[y, x] == OBSTACLE_VALUE 
+    #                     or (frontier_start_time is not None and time.time() - frontier_start_time > FRONTIER_TIMEOUT)):
+    #                     self.current_frontier_target = None
+    #                     frontier_timer = 0
+    #             else:
+    #                 self.current_frontier_target = None
+    #                 frontier_timer = 0    
+
+            
+
+    #         vis.update_screen_with_map(self.grid_map)
+    #         vis.draw_robot(self.get_map_position())
+    #         vis.draw_frontiers(frontiers[:50])
+    #         # filtered_frontiers = [f for f in frontiers if self.is_frontier_clear_by_lidar(f)]
+    #         # vis.draw_filtered_frontiers(filtered_frontiers)
+    #         if self.current_frontier_target is not None:
+    #             vis.draw_centroids([self.current_frontier_target])
+    #         vis.display_screen()
+
+    #         count += 1
+
+    #     start_point = [200, 250]
+    #     end_point = [600, 500]
+    #     return self.grid_map, start_point, end_point 
     
     def explore(self):
         vis = Visualizer()
@@ -285,6 +401,8 @@ class MyRobot:
         last_frontier_update = -100
         self.current_frontier_target = None
         frontier_timer = 0
+        frontier_start_time = None
+        FRONTIER_TIMEOUT = 5.0  # seconds
 
         while self.step(self.time_step) != -1 and count < 1500:
             for event in pygame.event.get(): 
@@ -292,40 +410,56 @@ class MyRobot:
                     running = False
             vis.clear_screen()
 
+            # -------------- FRONTIER FOLLOWING & FREEZE COMPUTATION ---------------
+            if self.current_frontier_target is not None:
+                x, y = self.current_frontier_target
+                if 0 <= x < MAP_SIZE and 0 <= y < MAP_SIZE:
+                    done = self.follow_local_target(self.current_frontier_target)
+                    frontier_timer += 1
+                    if (done 
+                        or frontier_timer > 150 
+                        or self.grid_map[y, x] == OBSTACLE_VALUE 
+                        or (frontier_start_time is not None and time.time() - frontier_start_time > FRONTIER_TIMEOUT)):
+                        self.current_frontier_target = None
+                        frontier_timer = 0
+                else:
+                    self.current_frontier_target = None
+                    frontier_timer = 0
+
+                vis.update_screen_with_map(self.grid_map)
+                vis.draw_robot(self.get_map_position())
+                vis.draw_frontiers(frontiers[:50])
+                if self.current_frontier_target is not None:
+                    vis.draw_centroids([self.current_frontier_target])
+                vis.display_screen()
+
+                count += 1
+                continue  # <--- SKIP further computation
+            # ---------------------------------------------------------------------
+
             distances = self.get_distances()
             if self.is_front_blocked_lidar():
                 self.adapt_direction()
             else:
                 self.set_robot_velocity(8, 8)
-            # if min(distances[0], distances[2]) < 0.3:
-            #     self.adapt_direction()
-            # else:
-            #     self.set_robot_velocity(8, 8)
             
             if count % 30 == 0:
                 unique = np.unique(self.grid_map, return_counts=True)
-                # print(f"Grid values: {dict(zip(unique[0], unique[1]))}")
 
             if count % 30 == 0:
                 map_x, map_y = self.get_map_position()
                 patch = self.grid_map[map_y-5:map_y+6, map_x-5:map_x+6]
-                # print("Region around robot:\n", patch)
 
             points = self.get_pointcloud_world_coordinates()
             map_points = self.convert_to_map_coordinate_matrix(points)
             
             if count % 20 == 0 and not self.is_turning():
-                # for map_point in map_points:
-                    # self.draw_bresenham_line(map_point)
-                    self.bresenham_to_obstacle_score(map_points)
-                    self.update_grid_map()
-                    # print(self.obstacle_score_map[100:200, 500:700])
-                    # vis.draw_line(cur_map_pos, map_point)
+                self.bresenham_to_obstacle_score(map_points)
+                self.update_grid_map()
 
-            if self.current_frontier_target is None and count - last_frontier_update > 10:
+            if self.current_frontier_target is None and count - last_frontier_update > 30:
                 frontiers = self.detect_frontiers()
 
-                # Clamp to valid map bounds
                 frontiers = [
                     f for f in frontiers
                     if 0 <= f[0] < MAP_SIZE and 0 <= f[1] < MAP_SIZE
@@ -333,48 +467,27 @@ class MyRobot:
 
                 robot_pos = self.get_map_position()
 
-                # Filter: free space only & not too close
                 frontiers = [
                     f for f in frontiers
                     if np.linalg.norm(np.array(f) - robot_pos) > 50 and self.grid_map[f[1], f[0]] == FREESPACE_VALUE
                 ]
 
-                # Sort by distance and limit to first 200
                 frontiers.sort(key=lambda p: np.linalg.norm(np.array(p) - robot_pos))
                 frontiers = frontiers[:200]
-                # Filter valid frontiers
+
                 frontiers = [f for f in frontiers if self.grid_map[f[1], f[0]] == FREESPACE_VALUE and self.is_frontier_clear_by_lidar(f, min_clearance_cm=5)]
                 
                 if frontiers:
                     scored = sorted(frontiers, key=lambda f: self.score_frontier(f, robot_pos))
                     self.current_frontier_target = scored[0]
+                    frontier_start_time = time.time()
                     last_frontier_update = count
                 else:
                     self.current_frontier_target = None
-                print(f"Number of frontiers: {len(frontiers)}")
-            print(f"Target frontier: {self.current_frontier_target}, Robot: {self.get_map_position()}")
-            
-            # Follow the current centroid
-            if self.current_frontier_target is not None and not self.is_turning():
-                x, y = self.current_frontier_target
-                if 0 <= x < MAP_SIZE and 0 <= y < MAP_SIZE:
-                    done = self.follow_local_target(self.current_frontier_target)
-                    frontier_timer += 1
-                    # Frontier completion or timeout or newly blocked
-                    if done or frontier_timer > 150 or self.grid_map[y, x] == OBSTACLE_VALUE:
-                        self.current_frontier_target = None
-                        frontier_timer = 0
-                else:
-                    self.current_frontier_target = None
-                    frontier_timer = 0    
-
-            
 
             vis.update_screen_with_map(self.grid_map)
             vis.draw_robot(self.get_map_position())
             vis.draw_frontiers(frontiers[:50])
-            # filtered_frontiers = [f for f in frontiers if self.is_frontier_clear_by_lidar(f)]
-            # vis.draw_filtered_frontiers(filtered_frontiers)
             if self.current_frontier_target is not None:
                 vis.draw_centroids([self.current_frontier_target])
             vis.display_screen()
@@ -383,7 +496,8 @@ class MyRobot:
 
         start_point = [200, 250]
         end_point = [600, 500]
-        return self.grid_map, start_point, end_point 
+        return self.grid_map, start_point, end_point
+
 
     def find_path(self, start_point, end_point):
 
@@ -723,4 +837,45 @@ class MyRobot:
         angle_to = np.arctan2(dy, dx)
         angle_diff = abs(get_angle_diff(angle_to, heading))
         angle_score = np.cos(angle_diff)
-        return dist - 30 * angle_score  # Tune weights
+        
+        wall_proximity_penalty = 0
+        if not self.is_safe_cell(f, inflation_pixels=6, fallback_lidar=True):
+            wall_proximity_penalty = 9999
+        
+        return dist - 40 * angle_score + wall_proximity_penalty  # Tune weights
+    
+    def astar_path(self, start, goal):
+        from queue import PriorityQueue
+
+        def heuristic(a, b):
+            return np.linalg.norm(np.array(a) - np.array(b))
+
+        open_set = PriorityQueue()
+        open_set.put((0, start))
+        came_from = {}
+        g_score = {start: 0}
+
+        while not open_set.empty():
+            _, current = open_set.get()
+            if current == goal:
+                path = [current]
+                while current in came_from:
+                    current = came_from[current]
+                    path.append(current)
+                return path[::-1]
+
+            for dx, dy in [(-1,0),(1,0),(0,-1),(0,1),(-1,-1),(1,1),(-1,1),(1,-1)]:
+                neighbor = (current[0]+dx, current[1]+dy)
+                if not (0 <= neighbor[0] < MAP_SIZE and 0 <= neighbor[1] < MAP_SIZE):
+                    continue
+                if self.grid_map[neighbor[1], neighbor[0]] == OBSTACLE_VALUE:
+                    continue
+
+                tentative = g_score[current] + heuristic(current, neighbor)
+                if neighbor not in g_score or tentative < g_score[neighbor]:
+                    g_score[neighbor] = tentative
+                    f_score = tentative + heuristic(neighbor, goal)
+                    open_set.put((f_score, neighbor))
+                    came_from[neighbor] = current
+
+        return []  # No path found
