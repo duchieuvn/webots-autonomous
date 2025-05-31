@@ -2,18 +2,19 @@ import pygame
 import numpy as np
 import cv2
 
-MAP_SIZE = 1000  # 1000cm = 10m
-window_size = (500, 500)
+# MAP_SIZE = 1000  # 1000cm = 10m
+# window_size = (500, 500)
 
 class Visualizer():
-    def __init__(self):
-        self.window_size = (500, 500)
+    def __init__(self, map_size=1000, window_size=(500, 500)):
+        self.MAP_SIZE = map_size
+        self.window_size = window_size
         self.screen = self.init_pygame()
         pass
     
     def init_pygame(self):
         pygame.init()
-        screen = pygame.display.set_mode(window_size)
+        screen = pygame.display.set_mode(self.window_size)
         pygame.display.set_caption("Occupancy Grid Map")
         return screen
     
@@ -24,8 +25,8 @@ class Visualizer():
         pygame.display.flip()
 
     def convert_map_to_screen(self, map_x, map_y):
-        screen_x = int(map_x * self.window_size[0] / MAP_SIZE)
-        screen_y = int(map_y * self.window_size[1] / MAP_SIZE)
+        screen_x = int(map_x * self.window_size[0] / self.MAP_SIZE)
+        screen_y = int(map_y * self.window_size[1] / self.MAP_SIZE)
         return screen_x, screen_y
 
     def draw_robot(self, map_position):
@@ -34,13 +35,13 @@ class Visualizer():
 
 
     def create_map_surface(self, visual_map):
-        map_resized = cv2.resize(visual_map, window_size)
+        map_resized = cv2.resize(visual_map, self.window_size)
         map_surface = pygame.surfarray.make_surface(map_resized)
         return map_surface
 
     def draw_path(self, path):
-        scale_x = window_size[0] / MAP_SIZE
-        scale_y = window_size[1] / MAP_SIZE
+        scale_x = self.window_size[0] / self.MAP_SIZE
+        scale_y = self.window_size[1] / self.MAP_SIZE
         scaled_path = [(int(x * scale_x), int(y * scale_y)) for (x, y) in path]
 
         for point in scaled_path:
@@ -49,16 +50,16 @@ class Visualizer():
     def draw_robot_to_target(self, robot, target):
         current_pos = robot.get_map_position()
         target_pos = target
-        scale_x = window_size[0] / MAP_SIZE
-        scale_y = window_size[1] / MAP_SIZE
+        scale_x = self.window_size[0] / self.MAP_SIZE
+        scale_y = self.window_size[1] / self.MAP_SIZE
         p1 = (current_pos[0] * scale_x, current_pos[1] * scale_y)
         p2 = (target_pos[0] * scale_x, target_pos[1] * scale_y)
         self.draw_infinite_line((255, 0, 0), p1, p2, width=2)
 
     def draw_robot_orientation(self, robot):
         current_pos = robot.get_map_position()
-        scale_x = window_size[0] / MAP_SIZE
-        scale_y = window_size[1] / MAP_SIZE
+        scale_x = self.window_size[0] / self.MAP_SIZE
+        scale_y = self.window_size[1] / self.MAP_SIZE
         p1 = (current_pos[0] * scale_x, current_pos[1] * scale_y)
         heading_rad = robot.get_heading('rad')
         dir_vector = (np.cos(heading_rad), np.sin(heading_rad))
@@ -137,3 +138,9 @@ class Visualizer():
         for x, y in frontiers:
             sx, sy = self.convert_map_to_screen(x, y)
             pygame.draw.circle(self.screen, color, (sx, sy), 2)
+
+    def draw_path(self, path, color=(0, 255, 255)):
+        for i in range(1, len(path)):
+            start = self.map_to_screen(path[i - 1])
+            end = self.map_to_screen(path[i])
+            pygame.draw.line(self.screen, color, start, end, 2)
