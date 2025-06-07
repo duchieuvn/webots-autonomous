@@ -155,8 +155,8 @@ class MyRobot:
 
     def dwa_planner(self, world_target):
         MAX_SPEED = MAX_VELOCITY * self.wheel_radius
-        v_samples = [0.08, 0.1, 0.15, 0.2, 0.5]
-        w_samples = [0, 2, -2, 4, -4, 4.5, -4.5]
+        v_samples = [0.1, 0.2, 0.4, 0.5]
+        w_samples = [0, 2, -2, 4.5, -4.5]
 
         best_score = -float('inf')
         best_v = 0.0
@@ -185,7 +185,7 @@ class MyRobot:
                     
                     # If the furtue distance from the target is greater than the current distance
                     predicted_distance = np.linalg.norm(world_target - np.array([cx, cy]))
-                    if predicted_distance > current_distance + 0.1:
+                    if predicted_distance - current_distance > 0.2:
                         good_path = False
                         break
 
@@ -198,7 +198,7 @@ class MyRobot:
                 heading_score = np.cos(heading_error)
                 distance_score = 1 - (predicted_distance / 2)
                 speed_score = v / MAX_SPEED
-                score = 4.0 * heading_score + 2.0 * distance_score + speed_score
+                score = 4.0 * heading_score + 3.5 * distance_score + speed_score
 
                 if score > best_score:
                     best_score = score
@@ -208,7 +208,8 @@ class MyRobot:
         return best_v, best_w
 
     def follow_local_target(self, map_target):
-        if self.get_map_distance(map_target) < 2:
+        # Return True if the robot reached the target
+        if self.get_map_distance(map_target) < 4:
             self.stop_motor()
             return True
 
