@@ -1,38 +1,40 @@
 import pygame
 from controller import Robot, Keyboard, Supervisor
-from setup import setup_robot
 from my_robot import MyRobot
 from visualization import Visualizer
-
-import numpy as np
-
-def draw_bresenham_line(grid_map, start, end):
-    x1, y1 = start
-    x2, y2 = end
-    dx = abs(x2 - x1)
-    dy = abs(y2 - y1)
-    sx = 1 if x1 < x2 else -1
-    sy = 1 if y1 < y2 else -1
-    err = dx - dy
-
-    while True:
-        grid_map[y1][x1] = 0  # Mark the line on the grid map
-        if x1 == x2 and y1 == y2:
-            break
-        err2 = err * 2
-        if err2 > -dy:
-            err -= dy
-            x1 += sx
-        if err2 < dx:
-            err += dx
-            y1 += sy    
+import time
 
 def main():
     robot = MyRobot()
-    vis = Visualizer()
-    grid_map, start_point, end_point = robot.explore()
-    # path = robot.find_path(start_point, end_point)
-    # robot.path_following_pipeline(path)
+    # vis = Visualizer()
 
-main()  
+    running = True
+    count = 0
+    red_wall_detected = False
 
+    while running and robot.step(robot.time_step) != -1:
+        # for event in pygame.event.get():
+        #     if event.type == pygame.QUIT:
+        #         running = False
+
+        # if not red_wall_detected and robot.there_is_red_wall():
+        distances = robot.get_distances()
+        if min(distances[0], distances[2]) < 0.4 and robot.there_is_red_wall():
+            # red_wall_detected = True
+            # if min(distances[0], distances[2]) < 1:
+            print("Red wall detected! Rotating 180 degrees...", flush=True)
+            robot.stop_motor()
+            robot.turn_180_degrees()
+            time.sleep(1)
+        else:
+            robot.adapt_direction()
+            robot.set_robot_velocity(6, 6)
+
+        # vis.clear_screen()
+        # vis.update_screen_with_map(robot.grid_map)
+        # vis.draw_robot(robot.get_map_position())
+        # vis.display_screen()
+
+        count += 1
+
+main()

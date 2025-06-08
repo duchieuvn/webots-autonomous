@@ -5,6 +5,7 @@ import random
 from visualization import Visualizer
 import pygame
 
+
 TIME_STEP = 32
 MAX_VELOCITY = 26
 WHEEL_RADIUS = 0.043
@@ -36,6 +37,10 @@ class MyRobot:
 
     def step(self, time_step=TIME_STEP):
         return self.robot.step(time_step)
+    
+    def turn_left_milisecond(self, s=200):
+        self.set_robot_velocity(-4, 4)
+        self.step(s)
 
     def is_turning(self):
         # Check if the robot is turning
@@ -219,7 +224,49 @@ class MyRobot:
         if self.grid_map[map_target[1], map_target[0]] == OBSTACLE_VALUE:
             return True
         return False
-    
+    def there_is_red_wall(self):
+        image_data = self.camera_rgb.getImage()
+        if image_data is None:
+            return False
+
+        width = self.camera_rgb.getWidth()
+        height = self.camera_rgb.getHeight()
+        image = np.frombuffer(image_data, np.uint8).reshape((height, width, 4))
+        frame = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
+        start_x = width // 5
+        end_x =  width // 5
+        cropped_frame = frame[:, start_x:end_x]
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+
+        lower_red1 = np.array([0, 120, 70])
+        upper_red1 = np.array([10, 255, 255])
+        lower_red2 = np.array([170, 120, 70])
+        upper_red2 = np.array([180, 255, 255])
+
+        mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
+        mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
+        red_mask = cv2.bitwise_or(mask1, mask2)
+
+        red_pixels = cv2.countNonZero(red_mask)
+        if red_pixels > 1000:
+            print("Red wall detected!")
+            return True
+        else:
+            return False
+        
+    def turn_180_degrees(self):
+        initial_heading = self.get_heading('rad')
+        self.set_robot_velocity(4, -4)  # Start turning in place (right turn)
+
+        while self.step() != -1:
+            current_heading = self.get_heading('rad')
+            angle_diff = abs(get_angle_diff(current_heading, initial_heading))
+
+            if angle_diff >= np.pi - 0.05:  # Allow a small threshold to avoid overshooting
+                break
+
+        self.stop_motor()
+
     def explore(self):
         vis = Visualizer()
         
@@ -394,3 +441,9 @@ class MyRobot:
             if err2 < dx:
                 err += dx
                 y1 += sy
+                
+
+
+
+
+    
