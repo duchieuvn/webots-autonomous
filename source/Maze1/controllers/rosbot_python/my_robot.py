@@ -4,6 +4,7 @@ import cv2
 import random
 from visualization import Visualizer
 import pygame
+import math
 
 TIME_STEP = 32
 MAX_VELOCITY = 26
@@ -228,7 +229,7 @@ class MyRobot:
         
         running = True
         count = 0
-        while self.step(self.time_step) != -1 and count < 1500:
+        while self.step(self.time_step) != -1 and count < 1000:
             for event in pygame.event.get(): 
                 if event.type == pygame.QUIT:
                     running = False
@@ -257,64 +258,127 @@ class MyRobot:
         end_point = [600, 500]
         return self.grid_map, start_point, end_point 
 
+    def visualize_grid_map(self, grid_map, window_name="Maze Grid Map"):
+        visual_map = (1 - grid_map) * 255  # 0 -> 255 (white), 1 -> 0 (black)
+        visual_map = visual_map.astype(np.uint8)
+        resized_map = cv2.resize(visual_map, (500, 500), interpolation=cv2.INTER_NEAREST)
+        cv2.imshow(window_name, resized_map)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+    
+    def generate_maze_grid_map(self, size=1000, wall_thickness =10, seed=None):
+        if seed is not None:
+            random.seed(seed)
+            np.random.seed(seed)
+
+        grid = np.zeros((size, size), dtype=np.uint8)
+
+        def divide(x, y, w, h):
+            if w < 2 * wall_thickness or h < 2 * wall_thickness:
+                return
+
+            horizontal = w < h
+            if horizontal:
+                if h - 2 * wall_thickness <= 0:
+                    return
+                wy = y + random.randrange(wall_thickness, h - wall_thickness)
+                passage_x = x + random.randrange(0, w)
+                for i in range(x, x + w):
+                    if abs(i - passage_x) >= wall_thickness // 2:
+                        grid[wy:wy + wall_thickness, i] = 1
+                divide(x, y, w, wy - y)
+                divide(x, wy + wall_thickness, w, y + h - wy - wall_thickness)
+            else:
+                if w - 2 * wall_thickness <= 0:
+                    return
+                wx = x + random.randrange(wall_thickness, w - wall_thickness)
+                passage_y = y + random.randrange(0, h)
+                for i in range(y, y + h):
+                    if abs(i - passage_y) >= wall_thickness // 2:
+                        grid[i, wx:wx + wall_thickness] = 1
+                divide(x, y, wx - x, h)
+                divide(wx + wall_thickness, y, x + w - wx - wall_thickness, h)
+
+        # Draw outer walls
+        grid[:wall_thickness, :] = 1
+        grid[-wall_thickness:, :] = 1
+        grid[:, :wall_thickness] = 1
+        grid[:, -wall_thickness:] = 1
+
+        # Start recursive division
+        divide(wall_thickness, wall_thickness, size - 2 * wall_thickness, size - 2 * wall_thickness)
+
+        return grid
+
     def find_path(self, start_point, end_point):
+    
+        def heuristic(a, b):
+         # Octile distance approximation without math.sqrt (approx sqrt(2) = 1.4)
+            dx = abs(a[0] - b[0])
+            dy = abs(a[1] - b[1])
+            D = 1
+            D2 = 1.4
+            return D * (dx + dy) + (D2 - 2 * D) * min(dx, dy)
 
-        def generate_random_curved_path(start_point, end_point):
-            step_size = 50
-            deviation = 5
-            x0, y0 = start_point
-            x1, y1 = end_point
-            dx = x1 - x0
-            dy = y1 - y0
-            distance = np.hypot(dx, dy)
+        def get_neighbors(pos):
+            x, y = pos
+            neighbors = []
+            for dx, dy in [(-1, -1), (-1, 0), (-1, 1),
+                        (0, -1),           (0, 1),
+                        (1, -1),  (1, 0),  (1, 1)]:
+                nx, ny = x + dx, y + dy
+                if 0 <= nx < self.grid_map.shape[0] and 0 <= ny < self.grid_map.shape[1]:
+                    if self.grid_map[nx, ny] == FREESPACE_VALUE:  # 0 means free space
+                        neighbors.append((nx, ny))
+            return neighbors
 
-            if distance == 0:
-                return [start_point]
-
-            num_steps = max(1, int(distance // step_size))
-
-            points = []
-            for i in range(num_steps + 1):
-                t = i / num_steps
-                x = x0 + t * dx
-                y = y0 + t * dy
-                offset_x = random.randint(-deviation, deviation)
-                offset_y = random.randint(-deviation, deviation)
-                x += offset_x
-                y += offset_y
-                points.append((int(round(x)), int(round(y))))
-
-            filtered_points = []
-            seen = set()
-            for p in points:
-                if p not in seen:
-                    filtered_points.append(p)
-                    seen.add(p)
-
-            if filtered_points[-1] != (int(round(x1)), int(round(y1))):
-                filtered_points[-1] = (int(round(x1)), int(round(y1)))
-
-            return filtered_points
-
-        def generate_path(start_point):
-            path = []
-            end_x, end_y = 400, 400
-
-            for i in range(2):
-                random_int = random.randint(200, 350)
-                if i % 2 == 0:
-                    end_x = start_point[0] + random_int
-                else:
-                    end_y = start_point[1] + random_int
-
-                path += generate_random_curved_path(start_point, (end_x, end_y))
-                start_point = [end_x + 30, end_y + 30]
-
-            path += generate_random_curved_path(start_point, end_point)
+        def reconstruct_path(came_from, current):
+            path = [current]
+            while current in came_from:
+                current = came_from[current]
+                path.append(current)
+            path.reverse()
             return path
 
-        path = generate_path(start_point)
-        return path
+        start = (int(round(start_point[0])), int(round(start_point[1])))
+        end = (int(round(end_point[0])), int(round(end_point[1])))
+
+        open_list = [start]
+        came_from = {}
+
+        g_score = np.full(self.grid_map.shape, np.inf)
+        g_score[start] = 0
+
+        f_score = np.full(self.grid_map.shape, np.inf)
+        f_score[start] = heuristic(start, end)
+
+        while open_list:
+            # Select node with lowest f_score manually
+            current = min(open_list, key=lambda pos: f_score[pos])
+
+            if current == end:
+                return reconstruct_path(came_from, current)
+
+            open_list.remove(current)
+
+            for neighbor in get_neighbors(current):
+                dx = abs(neighbor[0] - current[0])
+                dy = abs(neighbor[1] - current[1])
+                if dx == 1 and dy == 1:
+                    move_cost = 1.4  # diagonal
+                else:
+                    move_cost = 1    # straight
+
+                tentative_g = g_score[current] + move_cost
+
+                if tentative_g < g_score[neighbor]:
+                    came_from[neighbor] = current
+                    g_score[neighbor] = tentative_g
+                    f_score[neighbor] = tentative_g + heuristic(neighbor, end)
+                    if neighbor not in open_list:
+                        open_list.append(neighbor)
+
+        return []  # no path found
 
     def path_following_pipeline(self, path):
 
@@ -477,3 +541,23 @@ class MyRobot:
         inflated_map = (inflated > 0).astype(np.uint8)
         
         return inflated_map
+
+    def visualize_path_cv2(self, path, canvas_size=(1000, 1000), window_name="A* Path"):
+        # Create a white canvas
+        canvas = np.ones((canvas_size[1], canvas_size[0], 3), dtype=np.uint8) * 255
+
+        # Draw the path in red
+        for i in range(1, len(path)):
+            pt1 = tuple(path[i - 1])
+            pt2 = tuple(path[i])
+            cv2.line(canvas, pt1, pt2, (0, 0, 255), thickness=2)
+
+        # Mark start (green) and end (blue)
+        if path:
+            cv2.circle(canvas, tuple(path[0]), 5, (0, 255, 0), -1)   # Start: green
+            cv2.circle(canvas, tuple(path[-1]), 5, (255, 0, 0), -1)  # End: blue
+
+        # Show the canvas
+        cv2.imshow(window_name, canvas)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
