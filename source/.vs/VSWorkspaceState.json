@@ -1,0 +1,13 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\Maze1",
+    "\\Maze1\\controllers",
+    "\\Maze1\\controllers\\rosbot_python",
+    "\\pplan",
+    "\\pplan\\controllers",
+    "\\pplan\\controllers\\rosbot_python"
+  ],
+  "SelectedNode": "\\Maze1\\controllers\\rosbot_python\\visualization.py",
+  "PreviewInSolutionExplorer": false
+}

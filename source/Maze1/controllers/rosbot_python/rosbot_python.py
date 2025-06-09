@@ -1,10 +1,12 @@
-import pygame
+﻿import pygame
 from controller import Robot, Keyboard, Supervisor
 from setup import setup_robot
 from my_robot import MyRobot
 from visualization import Visualizer
-
+import random
 import numpy as np
+import cv2
+import math
 
 def draw_bresenham_line(grid_map, start, end):
     x1, y1 = start
@@ -29,12 +31,15 @@ def draw_bresenham_line(grid_map, start, end):
 
 def main():
     robot = MyRobot()
-    vis = Visualizer()
-    grid_map, start_point, end_point = robot.explore()
-    affected_map = robot.inflate_obstacles(grid_map)
-    
-    # path = robot.find_path(start_point, end_point)
-    # robot.path_following_pipeline(path)
-    
-main()  
+    # vis = Visualizer()
+    # grid_map, start_point, end_point = robot.explore()
+    # affected_map = robot.inflate_obstacles(grid_map)
+    robot.grid_map= robot.generate_maze_grid_map()
+    robot.visualize_grid_map(robot.grid_map)
+    start_point = [200, 250]
+    end_point = [600, 500]
+    path = robot.find_path(start_point, end_point)
+    robot.visualize_path_cv2(path)
+    robot.path_following_pipeline(path)
 
+main()  
