@@ -4,7 +4,7 @@ import cv2
 import random
 from visualization import Visualizer
 import pygame
-import math
+from PIL import Image
 
 TIME_STEP = 32
 MAX_VELOCITY = 26
@@ -153,7 +153,6 @@ class MyRobot:
             else:
                 turn_right_milisecond(800)
 
-
     def dwa_planner(self, world_target):
         MAX_SPEED = MAX_VELOCITY * self.wheel_radius
         v_samples = [0.1, 0.2, 0.4, 0.5]
@@ -226,37 +225,51 @@ class MyRobot:
         return False
     
     def explore(self):
-        vis = Visualizer()
+        # vis = Visualizer()
         
-        running = True
-        count = 0
-        while self.step(self.time_step) != -1 and count < 1000:
-            for event in pygame.event.get(): 
-                if event.type == pygame.QUIT:
-                    running = False
-            vis.clear_screen()
+        # running = True
+        # count = 0
+        # while self.step(self.time_step) != -1 and count < 1000:
+            # for event in pygame.event.get(): 
+            #     if event.type == pygame.QUIT:
+            #         running = False
+            # vis.clear_screen()
 
-            self.adapt_direction()
-            self.set_robot_velocity(8,8)
-            points = self.get_pointcloud_world_coordinates()
-            map_points = self.convert_to_map_coordinate_matrix(points)
+        #     self.adapt_direction()
+        #     self.set_robot_velocity(8,8)
+        #     points = self.get_pointcloud_world_coordinates()
+        #     map_points = self.convert_to_map_coordinate_matrix(points)
             
-            if count % 20 == 0 and not self.is_turning():
-                # for map_point in map_points:
-                    # self.draw_bresenham_line(map_point)
-                    self.bresenham_to_obstacle_score(map_points)
-                    self.update_grid_map()
-                    # print(self.obstacle_score_map[100:200, 500:700])
-                    # vis.draw_line(cur_map_pos, map_point)
+        #     if count % 20 == 0 and not self.is_turning():
+        #         # for map_point in map_points:
+        #             # self.draw_bresenham_line(map_point)
+        #             self.bresenham_to_obstacle_score(map_points)
+        #             self.update_grid_map()
+        #             # print(self.obstacle_score_map[100:200, 500:700])
+        #             # vis.draw_line(cur_map_pos, map_point)
 
-            vis.update_screen_with_map(self.grid_map)
-            vis.draw_robot(self.get_map_position())
-            vis.display_screen()
+        #     vis.update_screen_with_map(self.grid_map)
+        #     vis.draw_robot(self.get_map_position())
+        #     vis.display_screen()
 
-            count += 1
+        #     count += 1
 
-        start_point = [200, 250]
-        end_point = [600, 500]
+        start_point = [570, 275]
+        end_point = [516, 516]
+
+        # load test grid_map
+        image = Image.open("../../grid_map.png").convert("L")
+        img_array = np.array(image)
+        img_array[img_array > FREESPACE_VALUE] = OBSTACLE_VALUE
+
+        print(f"Unique values in grid_map: {np.unique(img_array)}")
+        self.grid_map = img_array.astype(np.uint8)
+
+        if self.grid_map[start_point[1], start_point[0]] != FREESPACE_VALUE or self.grid_map[end_point[1], end_point[0]] != FREESPACE_VALUE:
+            print("Explore is blocked. ---------")
+            print("Start value:", self.grid_map[start_point[1], start_point[0]])
+            print("End value:", self.grid_map[end_point[1], end_point[0]])
+
         return self.grid_map, start_point, end_point 
 
     def visualize_grid_map(self, grid_map, window_name="Maze Grid Map"):
@@ -311,10 +324,80 @@ class MyRobot:
 
         return grid
 
+    # def find_path(self, start_point, end_point):
+    
+    #     def heuristic(a, b):
+    #      # Octile distance approximation without math.sqrt (approx sqrt(2) = 1.4)
+    #         dx = abs(a[0] - b[0])
+    #         dy = abs(a[1] - b[1])
+    #         D = 1
+    #         D2 = 1.4
+    #         return D * (dx + dy) + (D2 - 2 * D) * min(dx, dy)
+
+    #     def get_neighbors(pos):
+    #         x, y = pos
+    #         neighbors = []
+    #         for dx, dy in [(-1, -1), (-1, 0), (-1, 1),
+    #                     (0, -1),           (0, 1),
+    #                     (1, -1),  (1, 0),  (1, 1)]:
+    #             nx, ny = x + dx, y + dy
+    #             if 0 <= nx < self.grid_map.shape[0] and 0 <= ny < self.grid_map.shape[1]:
+    #                 if self.grid_map[nx, ny] == FREESPACE_VALUE:  # 0 means free space
+    #                     neighbors.append((nx, ny))
+    #         return neighbors
+
+    #     def reconstruct_path(came_from, current):
+    #         path = [current]
+    #         while current in came_from:
+    #             current = came_from[current]
+    #             path.append(current)
+    #         path.reverse()
+    #         return path
+
+    #     start = (int(round(start_point[0])), int(round(start_point[1])))
+    #     end = (int(round(end_point[0])), int(round(end_point[1])))
+
+    #     open_list = [start]
+    #     came_from = {}
+
+    #     g_score = np.full(self.grid_map.shape, np.inf)
+    #     g_score[start] = 0
+
+    #     f_score = np.full(self.grid_map.shape, np.inf)
+    #     f_score[start] = heuristic(start, end)
+
+    #     while open_list:
+    #         # Select node with lowest f_score manually
+    #         current = min(open_list, key=lambda pos: f_score[pos])
+
+    #         if current == end:
+    #             return reconstruct_path(came_from, current)
+
+    #         open_list.remove(current)
+
+    #         for neighbor in get_neighbors(current):
+    #             dx = abs(neighbor[0] - current[0])
+    #             dy = abs(neighbor[1] - current[1])
+    #             if dx == 1 and dy == 1:
+    #                 move_cost = 1.4  # diagonal
+    #             else:
+    #                 move_cost = 1    # straight
+
+    #             tentative_g = g_score[current] + move_cost
+
+    #             if tentative_g < g_score[neighbor]:
+    #                 came_from[neighbor] = current
+    #                 g_score[neighbor] = tentative_g
+    #                 f_score[neighbor] = tentative_g + heuristic(neighbor, end)
+    #                 if neighbor not in open_list:
+    #                     open_list.append(neighbor)
+
+    #     return []  # no path found
+    
+
     def find_path(self, start_point, end_point):
     
         def heuristic(a, b):
-         # Octile distance approximation without math.sqrt (approx sqrt(2) = 1.4)
             dx = abs(a[0] - b[0])
             dy = abs(a[1] - b[1])
             D = 1
@@ -325,11 +408,11 @@ class MyRobot:
             x, y = pos
             neighbors = []
             for dx, dy in [(-1, -1), (-1, 0), (-1, 1),
-                        (0, -1),           (0, 1),
-                        (1, -1),  (1, 0),  (1, 1)]:
+                        (0, -1),          (0, 1),
+                        (1, -1),  (1, 0), (1, 1)]:
                 nx, ny = x + dx, y + dy
                 if 0 <= nx < self.grid_map.shape[0] and 0 <= ny < self.grid_map.shape[1]:
-                    if self.grid_map[nx, ny] == FREESPACE_VALUE:  # 0 means free space
+                    if self.grid_map[nx, ny] == FREESPACE_VALUE:
                         neighbors.append((nx, ny))
             return neighbors
 
@@ -341,8 +424,20 @@ class MyRobot:
             path.reverse()
             return path
 
-        start = (int(round(start_point[0])), int(round(start_point[1])))
-        end = (int(round(end_point[0])), int(round(end_point[1])))
+        start_y, start_x = (int(round(start_point[0])), int(round(start_point[1])))
+        end_y, end_x = (int(round(end_point[0])), int(round(end_point[1])))
+
+        start = (start_x, start_y)
+        end = (end_x, end_y)
+
+        img = Image.fromarray(self.grid_map * 255, mode='L')  # Convert to grayscale image
+        img.save('../../check_map.bmp') 
+
+        if self.grid_map[start_y, start_x] != FREESPACE_VALUE or self.grid_map[end_y, end_x] != FREESPACE_VALUE:
+            print("Start or end point is blocked.")
+            print("Start value:", self.grid_map[start_y, start_x])
+            print("End value:", self.grid_map[end_y, end_x])
+            return []
 
         open_list = [start]
         came_from = {}
@@ -354,21 +449,24 @@ class MyRobot:
         f_score[start] = heuristic(start, end)
 
         while open_list:
-            # Select node with lowest f_score manually
+            print("Open list:", open_list)
             current = min(open_list, key=lambda pos: f_score[pos])
+            print("Current node:", current)
 
             if current == end:
-                return reconstruct_path(came_from, current)
+                path = reconstruct_path(came_from, current)
+                print("Path found:", path)
+                return path
 
             open_list.remove(current)
 
-            for neighbor in get_neighbors(current):
+            neighbors = get_neighbors(current)
+            print("Neighbors of", current, ":", neighbors)
+
+            for neighbor in neighbors:
                 dx = abs(neighbor[0] - current[0])
                 dy = abs(neighbor[1] - current[1])
-                if dx == 1 and dy == 1:
-                    move_cost = 1.4  # diagonal
-                else:
-                    move_cost = 1    # straight
+                move_cost = 1.4 if dx == 1 and dy == 1 else 1
 
                 tentative_g = g_score[current] + move_cost
 
@@ -379,7 +477,9 @@ class MyRobot:
                     if neighbor not in open_list:
                         open_list.append(neighbor)
 
-        return []  # no path found
+        print("No path found.")
+        return []
+
 
     def path_following_pipeline(self, path):
 

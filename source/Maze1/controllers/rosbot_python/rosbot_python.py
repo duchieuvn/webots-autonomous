@@ -31,9 +31,27 @@ def main():
     robot = MyRobot()
     vis = Visualizer()
     grid_map, start_point, end_point = robot.explore()
-    affected_map = robot.inflate_obstacles(grid_map)
+    # affected_map = robot.inflate_obstacles(grid_map)
+
+    path = robot.find_path(start_point, end_point)
+    print("Path found:", path)
+
+    # Code-block to test find_path function
+    count = 0
+    while robot.step(robot.time_step) != -1 and count < 1000:
+        for event in pygame.event.get(): 
+            if event.type == pygame.QUIT:
+                running = False
+        vis.clear_screen()
     
-    # path = robot.find_path(start_point, end_point)
+        vis.update_screen_with_map(grid_map)
+        vis.draw_point(start_point, (0, 255, 0))  # Start point in green
+        vis.draw_point(end_point, (255, 0, 0))    # End point in red
+        # vis.draw_path(path)
+        vis.draw_robot(robot.get_map_position())
+        vis.display_screen()
+        count += 1
+
     # robot.path_following_pipeline(path)
     
 main()  

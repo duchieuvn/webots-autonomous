@@ -38,6 +38,10 @@ class Visualizer():
         map_surface = pygame.surfarray.make_surface(map_resized)
         return map_surface
 
+    def draw_point(self, map_position, color=(0, 255, 0), radius=3):
+        screen_x, screen_y = self.convert_map_to_screen(map_position[0], map_position[1])
+        pygame.draw.circle(self.screen, color, (screen_x, screen_y), radius)
+
     def draw_path(self, path):
         scale_x = window_size[0] / MAP_SIZE
         scale_y = window_size[1] / MAP_SIZE
