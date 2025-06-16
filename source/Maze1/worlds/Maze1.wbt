@@ -1,4 +1,4 @@
-#VRML_SIM R2025a utf8
+#VRML_SIM R2023b utf8
 
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/backgrounds/protos/TexturedBackground.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/robots/husarion/rosbot/protos/Rosbot.proto"
@@ -9,8 +9,8 @@ EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/project
 WorldInfo {
 }
 Viewpoint {
-  orientation 0.5504141765013282 -0.5903576180190969 -0.5903576180190978 4.27053560545065
-  position 0.396831760781885 -1.8244646065612533 25.123363514331658
+  orientation 0.4338290671340663 -0.46356718717590856 -0.7725916149450511 4.5218420347981745
+  position -0.629353985607379 -8.432793725291459 13.483714157277936
 }
 TexturedBackground {
   texture "empty_office"
@@ -21,8 +21,16 @@ TexturedBackground {
   ]
 }
 Rosbot {
-  translation 1.19194 2.23434 -0.000547142
-  rotation 1.5903699997988752e-05 -2.4280499996929387e-08 0.9999999998735358 -3.137975307179586
+  hidden position_0_0 1543.2652695042968
+  hidden position_0_1 1315.022760690786
+  hidden position_0_2 1543.2657635670041
+  hidden position_0_3 1315.023223236916
+  hidden rotation_2 0 -1 0 1.9802357621921853
+  hidden rotation_3 0 1 0 2.3359517828763114
+  hidden rotation_4 0 -1 0 2.0013462644160125
+  hidden rotation_5 0 0.9999999999999999 0 2.303126806414044
+  translation 0.212717 -0.46531 -0.000537576
+  rotation -4.921760139034643e-05 0.0001092927372274252 0.9999999928163626 0.8364846990946609
   controller "rosbot_python"
   supervisor TRUE
 }

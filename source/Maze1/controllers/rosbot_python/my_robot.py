@@ -111,46 +111,105 @@ class MyRobot:
         y = (MAP_SIZE // 2 - map_y) * RESOLUTION
         return float(x), float(y)
 
+    # def adapt_direction(self):
+    #     def turn_right_milisecond(s=200):  
+    #         self.set_robot_velocity(4, -4)
+    #         self.step(s)
+
+    #     def turn_left_milisecond(s=200):
+    #         self.set_robot_velocity(-4, 4)
+    #         self.step(s)
+
+    #     def go_backward_milisecond(s=200):
+    #         self.set_robot_velocity(-4, -4)
+    #         self.step(s)
+
+    #     # while there is an obstacle in front
+    #     count = 0
+    #     self.stop_motor()
+    #     last_turn = 'right'
+    #     distances = self.get_distances()
+    #     while (min(distances[0], distances[2]) < 0.3 and count < 4):
+    #         second = random.randint(100, 300)
+    #         if distances[0] < distances[2]:
+    #             turn_right_milisecond(second)
+    #             last_turn = 'right'
+    #         else:
+    #             turn_left_milisecond(second)
+    #             last_turn = 'left'
+
+    #         count += 1
+
+    #         distances = self.get_distances()
+        
+    #     if count == 4:
+    #         # if there is an obstacle behind
+    #         if (min(distances[1], distances[3]) > 0.3):
+    #             go_backward_milisecond(200)
+            
+    #         if last_turn == 0:
+    #             turn_left_milisecond(800)
+    #         else:
+    #             turn_right_milisecond(800)
+
+    # with distance sensor and lidar ->
+
     def adapt_direction(self):
-        def turn_right_milisecond(s=200):  
-            self.set_robot_velocity(4, -4)
-            self.step(s)
-
-        def turn_left_milisecond(s=200):
-            self.set_robot_velocity(-4, 4)
-            self.step(s)
-
-        def go_backward_milisecond(s=200):
+        def go_backward_millisecond(s=200):
             self.set_robot_velocity(-4, -4)
             self.step(s)
 
-        # while there is an obstacle in front
-        count = 0
+        # Stop first
         self.stop_motor()
-        last_turn = 'right'
         distances = self.get_distances()
-        while (min(distances[0], distances[2]) < 0.3 and count < 4):
-            second = random.randint(100, 300)
-            if distances[0] < distances[2]:
-                turn_right_milisecond(second)
-                last_turn = 'right'
-            else:
-                turn_left_milisecond(second)
-                last_turn = 'left'
 
+        # Check if front is blocked
+        front_blocked = min(distances[0], distances[2]) < 0.2
+        back_clear = min(distances[1], distances[3]) > 0.2
+
+        count = 0
+        while front_blocked and count < 2:
+            print(f"[DEBUG] Obstacle detected ahead. Attempting escape {count+1}/4")
+            self.turn_toward_lidar_free_space(duration=random.randint(150, 400))
+            self.stop_motor()
+            self.step(100)  # pause
+            distances = self.get_distances()
+            front_blocked = min(distances[0], distances[2]) < 0.2
             count += 1
 
-            distances = self.get_distances()
-        
-        if count == 4:
-            # if there is an obstacle behind
-            if (min(distances[1], distances[3]) > 0.3):
-                go_backward_milisecond(200)
-            
-            if last_turn == 0:
-                turn_left_milisecond(800)
-            else:
-                turn_right_milisecond(800)
+        # If still stuck, try to back up and turn again
+        if count == 2 and back_clear:
+            print("[DEBUG] Still stuck after 2 turns. Backing up.")
+            go_backward_millisecond(700)
+            self.turn_toward_lidar_free_space(duration=400)
+
+    # LiDAR-only escape behavior: uses LiDAR to detect frontal obstacles ->
+
+    def adapt_direction(self):
+        """
+        LiDAR-only escape behavior: uses LiDAR to detect frontal obstacles
+        and turns toward free space. If still stuck after 2 turns, backs up.
+        """
+        def go_backward_millisecond(s=300):
+            self.set_robot_velocity(-4, -4)
+            self.step(s)
+
+        self.stop_motor()
+        front_blocked = self.lidar_front_blocked(threshold=0.25)
+
+        count = 0
+        while front_blocked and count < 3:
+            print(f"[DEBUG] [LIDAR-ONLY] Obstacle ahead. Escape attempt {count+1}/2")
+            self.turn_toward_lidar_free_space(duration=random.randint(200, 400))
+            self.stop_motor()
+            self.step(100)
+            front_blocked = self.lidar_front_blocked(threshold=0.4)  # re-evaluate after turning
+            count += 1
+
+        if count == 3:
+            print("[DEBUG] [LIDAR-ONLY] Still blocked after 2 turns. Backing up.")
+            go_backward_millisecond(600)
+            self.turn_toward_lidar_free_space(duration=400)
 
 
     def dwa_planner(self, world_target):
@@ -228,7 +287,7 @@ class MyRobot:
         
         running = True
         count = 0
-        while self.step(self.time_step) != -1 and count < 1500:
+        while self.step(self.time_step) != -1 and count < 6000:
             for event in pygame.event.get(): 
                 if event.type == pygame.QUIT:
                     running = False
@@ -477,3 +536,40 @@ class MyRobot:
         inflated_map = (inflated > 0).astype(np.uint8)
         
         return inflated_map
+    
+    def turn_toward_lidar_free_space(self, duration=300):
+        """
+        Uses LiDAR to choose the freer direction and turns toward it.
+        """
+        points = self.get_pointcloud_2d()
+
+        if len(points) == 0:
+            # Default to turning right if no LiDAR data
+            self.set_robot_velocity(4, -4)
+            self.step(duration)
+            return
+
+        left_points = points[points[:, 1] > 0]  # y > 0 → left
+        right_points = points[points[:, 1] < 0]  # y < 0 → right
+
+        threshold = 1.5
+        left_clear = np.sum(np.linalg.norm(left_points, axis=1) > threshold)
+        right_clear = np.sum(np.linalg.norm(right_points, axis=1) > threshold)
+
+        if left_clear > right_clear:
+            print("[DEBUG] LiDAR turning LEFT")
+            self.set_robot_velocity(-4, 4)  # Turn left
+        else:
+            print("[DEBUG] LiDAR turning RIGHT")
+            self.set_robot_velocity(4, -4)  # Turn right
+
+        self.step(duration)
+
+    def lidar_front_blocked(self, threshold=0.4):
+        points = self.get_pointcloud_2d()
+        if len(points) == 0:
+            return False
+
+        # Filter front-facing points: -30° to +30° (x > 0.1 and |y| < 0.3)
+        front_points = points[(points[:, 0] > 0.1) & (np.abs(points[:, 1]) < 0.06)]
+        return np.any(np.linalg.norm(front_points, axis=1) < threshold)
