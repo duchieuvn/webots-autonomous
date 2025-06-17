@@ -5,6 +5,7 @@ import random
 from visualization import Visualizer
 import pygame
 from PIL import Image
+from astar import runAStarSearch
 
 TIME_STEP = 32
 MAX_VELOCITY = 26
@@ -262,7 +263,6 @@ class MyRobot:
         img_array = np.array(image)
         img_array[img_array > FREESPACE_VALUE] = OBSTACLE_VALUE
 
-        print(f"Unique values in grid_map: {np.unique(img_array)}")
         self.grid_map = img_array.astype(np.uint8)
 
         if self.grid_map[start_point[1], start_point[0]] != FREESPACE_VALUE or self.grid_map[end_point[1], end_point[0]] != FREESPACE_VALUE:
@@ -270,216 +270,12 @@ class MyRobot:
             print("Start value:", self.grid_map[start_point[1], start_point[0]])
             print("End value:", self.grid_map[end_point[1], end_point[0]])
 
-        return self.grid_map, start_point, end_point 
-
-    def visualize_grid_map(self, grid_map, window_name="Maze Grid Map"):
-        visual_map = (1 - grid_map) * 255  # 0 -> 255 (white), 1 -> 0 (black)
-        visual_map = visual_map.astype(np.uint8)
-        resized_map = cv2.resize(visual_map, (500, 500), interpolation=cv2.INTER_NEAREST)
-        cv2.imshow(window_name, resized_map)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
-    
-    def generate_maze_grid_map(self, size=1000, wall_thickness =10, seed=None):
-        if seed is not None:
-            random.seed(seed)
-            np.random.seed(seed)
-
-        grid = np.zeros((size, size), dtype=np.uint8)
-
-        def divide(x, y, w, h):
-            if w < 2 * wall_thickness or h < 2 * wall_thickness:
-                return
-
-            horizontal = w < h
-            if horizontal:
-                if h - 2 * wall_thickness <= 0:
-                    return
-                wy = y + random.randrange(wall_thickness, h - wall_thickness)
-                passage_x = x + random.randrange(0, w)
-                for i in range(x, x + w):
-                    if abs(i - passage_x) >= wall_thickness // 2:
-                        grid[wy:wy + wall_thickness, i] = 1
-                divide(x, y, w, wy - y)
-                divide(x, wy + wall_thickness, w, y + h - wy - wall_thickness)
-            else:
-                if w - 2 * wall_thickness <= 0:
-                    return
-                wx = x + random.randrange(wall_thickness, w - wall_thickness)
-                passage_y = y + random.randrange(0, h)
-                for i in range(y, y + h):
-                    if abs(i - passage_y) >= wall_thickness // 2:
-                        grid[i, wx:wx + wall_thickness] = 1
-                divide(x, y, wx - x, h)
-                divide(wx + wall_thickness, y, x + w - wx - wall_thickness, h)
-
-        # Draw outer walls
-        grid[:wall_thickness, :] = 1
-        grid[-wall_thickness:, :] = 1
-        grid[:, :wall_thickness] = 1
-        grid[:, -wall_thickness:] = 1
-
-        # Start recursive division
-        divide(wall_thickness, wall_thickness, size - 2 * wall_thickness, size - 2 * wall_thickness)
-
-        return grid
-
-    # def find_path(self, start_point, end_point):
-    
-    #     def heuristic(a, b):
-    #      # Octile distance approximation without math.sqrt (approx sqrt(2) = 1.4)
-    #         dx = abs(a[0] - b[0])
-    #         dy = abs(a[1] - b[1])
-    #         D = 1
-    #         D2 = 1.4
-    #         return D * (dx + dy) + (D2 - 2 * D) * min(dx, dy)
-
-    #     def get_neighbors(pos):
-    #         x, y = pos
-    #         neighbors = []
-    #         for dx, dy in [(-1, -1), (-1, 0), (-1, 1),
-    #                     (0, -1),           (0, 1),
-    #                     (1, -1),  (1, 0),  (1, 1)]:
-    #             nx, ny = x + dx, y + dy
-    #             if 0 <= nx < self.grid_map.shape[0] and 0 <= ny < self.grid_map.shape[1]:
-    #                 if self.grid_map[nx, ny] == FREESPACE_VALUE:  # 0 means free space
-    #                     neighbors.append((nx, ny))
-    #         return neighbors
-
-    #     def reconstruct_path(came_from, current):
-    #         path = [current]
-    #         while current in came_from:
-    #             current = came_from[current]
-    #             path.append(current)
-    #         path.reverse()
-    #         return path
-
-    #     start = (int(round(start_point[0])), int(round(start_point[1])))
-    #     end = (int(round(end_point[0])), int(round(end_point[1])))
-
-    #     open_list = [start]
-    #     came_from = {}
-
-    #     g_score = np.full(self.grid_map.shape, np.inf)
-    #     g_score[start] = 0
-
-    #     f_score = np.full(self.grid_map.shape, np.inf)
-    #     f_score[start] = heuristic(start, end)
-
-    #     while open_list:
-    #         # Select node with lowest f_score manually
-    #         current = min(open_list, key=lambda pos: f_score[pos])
-
-    #         if current == end:
-    #             return reconstruct_path(came_from, current)
-
-    #         open_list.remove(current)
-
-    #         for neighbor in get_neighbors(current):
-    #             dx = abs(neighbor[0] - current[0])
-    #             dy = abs(neighbor[1] - current[1])
-    #             if dx == 1 and dy == 1:
-    #                 move_cost = 1.4  # diagonal
-    #             else:
-    #                 move_cost = 1    # straight
-
-    #             tentative_g = g_score[current] + move_cost
-
-    #             if tentative_g < g_score[neighbor]:
-    #                 came_from[neighbor] = current
-    #                 g_score[neighbor] = tentative_g
-    #                 f_score[neighbor] = tentative_g + heuristic(neighbor, end)
-    #                 if neighbor not in open_list:
-    #                     open_list.append(neighbor)
-
-    #     return []  # no path found
-    
+        return self.grid_map.copy(), start_point, end_point 
 
     def find_path(self, start_point, end_point):
-    
-        def heuristic(a, b):
-            dx = abs(a[0] - b[0])
-            dy = abs(a[1] - b[1])
-            D = 1
-            D2 = 1.4
-            return D * (dx + dy) + (D2 - 2 * D) * min(dx, dy)
-
-        def get_neighbors(pos):
-            x, y = pos
-            neighbors = []
-            for dx, dy in [(-1, -1), (-1, 0), (-1, 1),
-                        (0, -1),          (0, 1),
-                        (1, -1),  (1, 0), (1, 1)]:
-                nx, ny = x + dx, y + dy
-                if 0 <= nx < self.grid_map.shape[0] and 0 <= ny < self.grid_map.shape[1]:
-                    if self.grid_map[nx, ny] == FREESPACE_VALUE:
-                        neighbors.append((nx, ny))
-            return neighbors
-
-        def reconstruct_path(came_from, current):
-            path = [current]
-            while current in came_from:
-                current = came_from[current]
-                path.append(current)
-            path.reverse()
-            return path
-
-        start_y, start_x = (int(round(start_point[0])), int(round(start_point[1])))
-        end_y, end_x = (int(round(end_point[0])), int(round(end_point[1])))
-
-        start = (start_x, start_y)
-        end = (end_x, end_y)
-
-        img = Image.fromarray(self.grid_map * 255, mode='L')  # Convert to grayscale image
-        img.save('../../check_map.bmp') 
-
-        if self.grid_map[start_y, start_x] != FREESPACE_VALUE or self.grid_map[end_y, end_x] != FREESPACE_VALUE:
-            print("Start or end point is blocked.")
-            print("Start value:", self.grid_map[start_y, start_x])
-            print("End value:", self.grid_map[end_y, end_x])
-            return []
-
-        open_list = [start]
-        came_from = {}
-
-        g_score = np.full(self.grid_map.shape, np.inf)
-        g_score[start] = 0
-
-        f_score = np.full(self.grid_map.shape, np.inf)
-        f_score[start] = heuristic(start, end)
-
-        while open_list:
-            print("Open list:", open_list)
-            current = min(open_list, key=lambda pos: f_score[pos])
-            print("Current node:", current)
-
-            if current == end:
-                path = reconstruct_path(came_from, current)
-                print("Path found:", path)
-                return path
-
-            open_list.remove(current)
-
-            neighbors = get_neighbors(current)
-            print("Neighbors of", current, ":", neighbors)
-
-            for neighbor in neighbors:
-                dx = abs(neighbor[0] - current[0])
-                dy = abs(neighbor[1] - current[1])
-                move_cost = 1.4 if dx == 1 and dy == 1 else 1
-
-                tentative_g = g_score[current] + move_cost
-
-                if tentative_g < g_score[neighbor]:
-                    came_from[neighbor] = current
-                    g_score[neighbor] = tentative_g
-                    f_score[neighbor] = tentative_g + heuristic(neighbor, end)
-                    if neighbor not in open_list:
-                        open_list.append(neighbor)
-
-        print("No path found.")
-        return []
-
+        global_map = self.grid_map.copy().astype(np.float32)
+        path = runAStarSearch(global_map, start_point, end_point)
+        return path
 
     def path_following_pipeline(self, path):
 
