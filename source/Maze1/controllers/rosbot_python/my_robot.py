@@ -112,16 +112,14 @@ class MyRobot:
         x = (map_x - MAP_SIZE // 2) * RESOLUTION
         y = (MAP_SIZE // 2 - map_y) * RESOLUTION
         return float(x), float(y)
+    
+    def obstacle_in_front(self):
+        distances = self.get_distances()
+        if min(distances[0], distances[2]) < 0.3:
+            return True
+        return False
 
     def adapt_direction(self):
-        def turn_right_milisecond(s=200):  
-            self.set_robot_velocity(4, -4)
-            self.step(s)
-
-        def turn_left_milisecond(s=200):
-            self.set_robot_velocity(-4, 4)
-            self.step(s)
-
         def go_backward_milisecond(s=200):
             self.set_robot_velocity(-4, -4)
             self.step(s)
@@ -130,30 +128,34 @@ class MyRobot:
         count = 0
         self.stop_motor()
         last_turn = 'right'
-        distances = self.get_distances()
-        while (min(distances[0], distances[2]) < 0.3 and count < 4):
-            second = random.randint(100, 300)
-            if distances[0] < distances[2]:
-                turn_right_milisecond(second)
-                last_turn = 'right'
-            else:
-                turn_left_milisecond(second)
-                last_turn = 'left'
 
-            count += 1
+        while (self.obstacle_in_front() and count < 4):
+            if self.there_is_red_wall():
+                pass
+            else:
+                rand_deg = random.randint(40, 100)
+                if distances[0] < distances[2]:
+                    self.turn_degrees(rand_deg, 'right')
+                    last_turn = 'right'
+                else:
+                    self.turn_degrees(rand_deg, 'left')
+                    last_turn = 'left'
+
+                count += 1
 
             distances = self.get_distances()
         
+
+
         if count == 4:
-            # if there is an obstacle behind
+            # if there is no obstacle behind
             if (min(distances[1], distances[3]) > 0.3):
                 go_backward_milisecond(200)
             
-            if last_turn == 0:
-                turn_left_milisecond(800)
+            if last_turn == 'left':
+                self.turn_degrees(180, 'right')
             else:
-                turn_right_milisecond(800)
-
+                self.turn_degrees(180, 'left')
 
     def dwa_planner(self, world_target):
         MAX_SPEED = MAX_VELOCITY * self.wheel_radius
@@ -224,6 +226,7 @@ class MyRobot:
         if self.grid_map[map_target[1], map_target[0]] == OBSTACLE_VALUE:
             return True
         return False
+    
     def there_is_red_wall(self):
         image_data = self.camera_rgb.getImage()
         if image_data is None:
@@ -254,15 +257,19 @@ class MyRobot:
         else:
             return False
         
-    def turn_180_degrees(self):
+    def turn_degrees(self, degree_to_turn, direction='right'):
+        rad_to_turn = np.deg2rad(degree_to_turn)
         initial_heading = self.get_heading('rad')
-        self.set_robot_velocity(4, -4)  # Start turning in place (right turn)
+        if direction == 'right':
+            self.set_robot_velocity(4, -4)  # Start turning in place (right turn)
+        else:
+            self.set_robot_velocity(-4,4)
 
         while self.step() != -1:
             current_heading = self.get_heading('rad')
             angle_diff = abs(get_angle_diff(current_heading, initial_heading))
 
-            if angle_diff >= np.pi - 0.05:  # Allow a small threshold to avoid overshooting
+            if angle_diff - rad_to_turn < 0.05:  # Allow a small threshold to avoid overshooting
                 break
 
         self.stop_motor()
@@ -444,6 +451,48 @@ class MyRobot:
                 
 
 
+    def detect_pillar(self):
+        image_data = self.camera_rgb.getImage()
+        if image_data is None:
+            return False
+
+        width = self.camera_rgb.getWidth()
+        height = self.camera_rgb.getHeight()
+        image = np.frombuffer(image_data, np.uint8).reshape((height, width, 4))
+        frame = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
+
+        # Optional: crop to center area only
+        
+
+        start_y = height // 2 
+        end_y = height
+        cropped_frame = frame[start_y:end_y, :]
+
+        # Convert to HSV
+        hsv = cv2.cvtColor(cropped_frame, cv2.COLOR_BGR2HSV)
+
+        # HSV ranges for yellow
+        lower_yellow = np.array([20, 100, 100])
+        upper_yellow = np.array([35, 255, 255])
+
+        # HSV ranges for blue
+        lower_blue = np.array([100, 150, 50])
+        upper_blue = np.array([140, 255, 255])
+
+        # Create masks
+        yellow_mask = cv2.inRange(hsv, lower_yellow, upper_yellow)
+        blue_mask = cv2.inRange(hsv, lower_blue, upper_blue)
+
+        # Count pixels
+        yellow_pixels = cv2.countNonZero(yellow_mask)
+        blue_pixels = cv2.countNonZero(blue_mask)
+
+        if yellow_pixels > 1000:
+            return 'yellow'
+        if blue_pixels > 1000:
+            return 'blue'
+
+        return None
 
 
     
