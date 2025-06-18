@@ -19,12 +19,17 @@ def main():
 
         # if not red_wall_detected and robot.there_is_red_wall():
         distances = robot.get_distances()
+
+        if robot.detect_pillar() != None:
+            if min(distances[0], distances[2]) < 0.4: 
+                print('Column detected')
+                
         if min(distances[0], distances[2]) < 0.4 and robot.there_is_red_wall():
             # red_wall_detected = True
             # if min(distances[0], distances[2]) < 1:
             print("Red wall detected! Rotating 180 degrees...", flush=True)
             robot.stop_motor()
-            robot.turn_180_degrees()
+            robot.turn_right_degrees()
             time.sleep(1)
         else:
             robot.adapt_direction()
